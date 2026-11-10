@@ -27,6 +27,15 @@ Contract
 * One tick at a time: :mod:`app.routers.internal_tick` holds a process-local
   ``asyncio.Lock``; ``acquire_scheduler_job`` holds a per-job ``locked_until``
   across processes (and across restarts).
+* The per-job budget is a *hard* deadline. Job bodies run on a dedicated
+  executor thread, never on the tick's event loop, and the tick waits with
+  :func:`asyncio.wait` instead of :func:`asyncio.wait_for`: ``wait_for`` cannot
+  interrupt a body that is blocking the loop, and since Python 3.12 it also
+  *awaits the cancelled task* before raising ``TimeoutError``, so a job whose
+  cancellation unwind is slow (thread-bound cleanup, a hung client) overruns the
+  budget by exactly that long. When the deadline passes the tick detaches the
+  job, records ``budget_exceeded`` and releases the lease; a body that is
+  already executing finishes on its worker thread, detached from the tick.
 * A failure writes ``last_error`` + ``retry_after`` (default 120s) instead of
   hammering the upstream on every tick.
 * Supabase unavailable (or the migration not applied) => log and skip the tick.
@@ -40,8 +49,10 @@ import inspect
 import logging
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any, Callable, Optional
 
 from app.config import get_settings
@@ -61,6 +72,21 @@ MAX_ERROR_CHARS = 500
 # a 60 s cadence cannot be honoured by a 300 s tick, so declaring one only
 # inflates the demand the capacity test is supposed to check.
 TICK_PERIOD_SECONDS = 300
+
+# Job bodies get their own executor, never the loop's default executor: the
+# default one also carries the lease RPCs (`load_states` / `acquire` /
+# `release`), and a job that pins a worker would otherwise starve the very
+# calls the tick needs to fence itself. Four workers means one abandoned job
+# cannot block the next job's slot either.
+JOB_EXECUTOR_MAX_WORKERS = 4
+_JOB_EXECUTOR = ThreadPoolExecutor(
+    max_workers=JOB_EXECUTOR_MAX_WORKERS, thread_name_prefix="scheduler-job"
+)
+
+# A hung Supabase must not hold the tick past its budget while it records the
+# outcome. Timing out here leaves the per-job lease to expire on its own TTL,
+# which fails closed (the next tick sees `locked`) rather than open.
+JOB_RELEASE_TIMEOUT_SECONDS = 10.0
 
 
 class SchedulerStateUnavailable(RuntimeError):
@@ -386,14 +412,55 @@ def get_job_callable(name: str) -> Callable[[], Any]:
     return cycle
 
 
-async def _invoke(fn: Callable[[], Any]) -> Any:
-    """Run sync bodies off the event loop; await async bodies in place."""
+async def _await_value(awaitable: Any) -> Any:
+    """Drive an already-created awaitable (a sync body that returned one)."""
+    return await awaitable
+
+
+def _run_job_body(fn: Callable[[], Any]) -> Any:
+    """Run one job body to completion on a worker thread.
+
+    Coroutine bodies are driven by ``asyncio.run`` on that thread's own loop: no
+    job code may execute on the tick's loop, because a body that blocks it
+    (sync HTTP, a CPU-bound parse, a sync Redis call) also freezes the timer that
+    enforces the budget. A sync body that returns an awaitable is driven the
+    same way, preserving the old ``_invoke`` semantics.
+    """
     if inspect.iscoroutinefunction(fn):
-        return await fn()
-    result = await asyncio.to_thread(fn)
+        return asyncio.run(fn())
+    result = fn()
     if inspect.isawaitable(result):
-        return await result
+        return asyncio.run(_await_value(result))
     return result
+
+
+def _log_abandoned(name: str, run_id: str, future: "asyncio.Future") -> None:
+    """Report the eventual outcome of a job the tick walked away from.
+
+    Kept deliberately defensive: cancelling the wrapper future marks it done
+    immediately, so this normally short-circuits on the first line. It only
+    reports when the underlying call completed before the cancel landed.
+    """
+    if future.cancelled():
+        return
+    try:
+        exc = future.exception()
+    except BaseException:  # pragma: no cover - defensive
+        return
+    if exc is not None:
+        logger.warning(
+            "scheduler[%s]: abandoned %s finished late with %s: %s",
+            run_id,
+            name,
+            type(exc).__name__,
+            exc,
+        )
+    else:
+        logger.info(
+            "scheduler[%s]: abandoned %s finished late; result discarded",
+            run_id,
+            name,
+        )
 
 
 async def _acquire_job(name: str):
@@ -408,18 +475,40 @@ async def _acquire_job(name: str):
 
 async def _execute_job(name: str, timeout: float, run_id: str, lease) -> dict:
     started = time.monotonic()
+    deadline = max(1.0, timeout)
     status = "ok"
     error: Optional[str] = None
+
     try:
-        await asyncio.wait_for(_invoke(get_job_callable(name)), timeout=max(1.0, timeout))
-    except asyncio.TimeoutError:
-        status = "error"
-        error = f"budget_exceeded: job did not finish within {timeout:.0f}s"
-    except asyncio.CancelledError:
-        raise
+        body = get_job_callable(name)
     except Exception as exc:
         status = "error"
         error = f"{type(exc).__name__}: {exc}"
+    else:
+        future = asyncio.get_running_loop().run_in_executor(
+            _JOB_EXECUTOR, _run_job_body, body
+        )
+        try:
+            done, _pending = await asyncio.wait({future}, timeout=deadline)
+        except asyncio.CancelledError:
+            future.cancel()
+            raise
+
+        if future in done:
+            failure = None if future.cancelled() else future.exception()
+            if failure is not None:
+                status = "error"
+                error = f"{type(failure).__name__}: {failure}"
+        else:
+            # Hard deadline. `future.cancel()` marks the wrapper done at once and
+            # stops a body that has not started yet from running late (which
+            # would double-run a job already recorded as failed). A body that is
+            # already executing cannot be interrupted: its thread finishes
+            # detached, and the `budget_exceeded` warning below is the record.
+            future.cancel()
+            future.add_done_callback(partial(_log_abandoned, name, run_id))
+            status = "error"
+            error = f"budget_exceeded: job did not finish within {deadline:.0f}s"
 
     duration_ms = int((time.monotonic() - started) * 1000)
     if status == "ok":
@@ -428,11 +517,20 @@ async def _execute_job(name: str, timeout: float, run_id: str, lease) -> dict:
         logger.warning("scheduler[%s]: %s failed in %dms — %s", run_id, name, duration_ms, error)
 
     try:
-        completed = await asyncio.to_thread(
-            release, lease, name, status, error, DEFAULT_RETRY_BACKOFF_SECONDS
+        completed = await asyncio.wait_for(
+            asyncio.to_thread(
+                release, lease, name, status, error, DEFAULT_RETRY_BACKOFF_SECONDS
+            ),
+            timeout=JOB_RELEASE_TIMEOUT_SECONDS,
         )
         if not completed:
             logger.warning("scheduler: fenced completion rejected for %s", name)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "scheduler: recording %s outcome exceeded %.0fs; lease expires on its TTL",
+            name,
+            JOB_RELEASE_TIMEOUT_SECONDS,
+        )
     except SchedulerStateUnavailable as exc:
         logger.warning("scheduler: could not record %s outcome (%s)", name, exc)
 
@@ -474,6 +572,9 @@ async def run_tick(
                 deferred,
             )
             break
+        # Stop starting new jobs the moment the budget is spent. This is the
+        # second half of the invariant: `_execute_job` cannot overrun its own
+        # deadline, and nothing new is admitted once the tick's clock is out.
         remaining = budget - (time.monotonic() - started)
         if remaining <= 1.0:
             deferred = plan.due[index:]

@@ -18,6 +18,7 @@ Contract pinned here:
 
 import asyncio
 import json
+import time
 from datetime import timedelta
 
 import pytest
@@ -428,9 +429,162 @@ async def test_state_unavailable_skips_the_tick_without_raising(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 3b. Capacity vs registry demand
+# 3a. Hard per-job deadline
 # ---------------------------------------------------------------------------
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "shape", ["thread_bound", "loop_blocking", "slow_cancel_unwind"]
+)
+async def test_overrunning_job_cannot_hold_the_tick_past_the_budget(monkeypatch, shape):
+    """One slow job must not extend the tick, whatever it is doing.
+
+    Measured on the VPS 2026-11-10: `news` took 277 s against a 179 s per-job
+    budget, the tick overran, and the next two ticks returned `skipped_locked`.
+    `asyncio.wait_for` could not enforce the deadline, for three reasons pinned
+    here: it cannot interrupt a body that blocks the loop; since Python 3.12 it
+    *awaits the cancelled task* before raising ``TimeoutError``, so a slow
+    cancellation unwind is charged to the tick; and a thread-bound body keeps
+    running after the await returns.
+    """
+    import threading
+
+    from app.services.refresh_coordinator import RefreshLease
+
+    budget = 2.0
+    monkeypatch.setattr(job_scheduler.get_settings(), "tick_budget_seconds", budget)
+    monkeypatch.setattr(job_scheduler.get_settings(), "tick_max_jobs", 2)
+
+    gate = threading.Event()
+    finished: list[int] = []
+
+    if shape == "thread_bound":
+
+        def body():
+            gate.wait(10)
+            finished.append(1)
+
+    elif shape == "loop_blocking":
+
+        async def body():
+            gate.wait(10)  # blocking wait: freezes the tick's loop if run in place
+            finished.append(1)
+
+    else:
+
+        async def body():
+            # Mirrors the news ingestor: an async body whose cancellation unwind
+            # awaits more work, so `wait_for` keeps waiting past its deadline.
+            try:
+                while not gate.is_set():
+                    await asyncio.sleep(0.02)
+                finished.append(1)
+            except asyncio.CancelledError:
+                await asyncio.sleep(6)
+                raise
+
+    monkeypatch.setattr(job_scheduler, "get_job_callable", lambda name: body)
+    monkeypatch.setattr(
+        job_scheduler,
+        "acquire",
+        lambda job, ttl: RefreshLease(f"scheduler_job:{job}", "owner", 1),
+    )
+    released: list[dict] = []
+
+    def fake_release(lease, job, status, error=None, retry_after_seconds=120):
+        released.append({"job": job, "status": status, "error": error})
+        return True
+
+    monkeypatch.setattr(job_scheduler, "release", fake_release)
+
+    try:
+        started = time.monotonic()
+        result = await job_scheduler.run_tick(
+            plan=job_scheduler.TickPlan(due=["news", "bmkg"]), run_id="overrun"
+        )
+        elapsed = time.monotonic() - started
+
+        # The tick returns control at its own budget, not the job's duration.
+        assert elapsed < budget * 2, f"tick overran its {budget}s budget: {elapsed:.1f}s"
+        assert finished == [], "the overrunning job was allowed to finish inside the tick"
+
+        assert [entry["job"] for entry in result["executed"]] == ["news"]
+        assert result["executed"][0]["status"] == "error"
+        assert "budget_exceeded" in result["executed"][0]["error"]
+
+        # The per-job lease is handed back under the fence, with the error
+        # recorded, so the job is retried after the backoff instead of hanging.
+        assert released == [
+            {
+                "job": "news",
+                "status": "error",
+                "error": result["executed"][0]["error"],
+            }
+        ]
+        # Nothing new is started once the budget is spent.
+        assert result["deferred"] == ["bmkg"]
+    finally:
+        # Let the abandoned worker unwind while the test loop is still open.
+        gate.set()
+        await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+async def test_next_tick_is_not_skipped_locked_after_an_overrun(monkeypatch, tick_token):
+    """An overrun must not leave `_tick_lock` (or the tick lease) held.
+
+    This is the production symptom: `news` overran, the tick task was still
+    inside `run_tick`, so the following cron deliveries got
+    ``202 {"accepted": false, "reason": "already_running"}`` and
+    `weather_summary` went stale until bmkg next ran.
+    """
+    import threading
+
+    from app.services.refresh_coordinator import RefreshLease
+
+    monkeypatch.setattr(job_scheduler.get_settings(), "tick_budget_seconds", 2.0)
+
+    gate = threading.Event()
+
+    async def body():
+        gate.wait(10)
+
+    monkeypatch.setattr(job_scheduler, "get_job_callable", lambda name: body)
+    monkeypatch.setattr(
+        job_scheduler,
+        "acquire",
+        lambda job, ttl: RefreshLease(f"scheduler_job:{job}", "owner", 1),
+    )
+    monkeypatch.setattr(job_scheduler, "release", lambda *args, **kwargs: True)
+
+    async def fake_plan():
+        return job_scheduler.TickPlan(due=["news"])
+
+    monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
+
+    try:
+        first = await internal_tick.internal_tick(x_internal_token=TOKEN)
+        assert first["accepted"] is True
+
+        # The background tick must finish (and drop the lock) on its own budget.
+        await asyncio.wait_for(internal_tick.wait_for_pending_ticks(), timeout=10)
+        assert internal_tick._tick_lock.locked() is False
+
+        second = await internal_tick.internal_tick(x_internal_token=TOKEN)
+        assert not hasattr(second, "status_code"), "second tick was rejected as already_running"
+        assert second["accepted"] is True
+        await asyncio.wait_for(internal_tick.wait_for_pending_ticks(), timeout=10)
+
+        statuses = [run["status"] for run in internal_tick._RECENT_INGEST_RUNS]
+        assert "skipped_locked" not in statuses
+    finally:
+        gate.set()
+        await asyncio.sleep(0.1)
+
+
+# ---------------------------------------------------------------------------
+# 3b. Capacity vs registry demand
+# ---------------------------------------------------------------------------
 def test_configured_tick_capacity_covers_registry_demand():
     """The tick must be able to serve the registry it declares.
 
