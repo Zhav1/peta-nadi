@@ -3,7 +3,7 @@
   "checkpoint_id": "01M7571T72KD26QYHTA6XR1T1R",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 4,
+  "checkpoints_count": 8,
   "files_touched": [
     "backend/app/routers/news_router.py",
     "backend/tests/test_news_ordering.py",
@@ -47,6 +47,12 @@
       "transcript": "/3/full.jsonl",
       "content_hash": "/3/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/4/metadata.json",
+      "transcript": "/4/full.jsonl",
+      "content_hash": "/4/content_hash.txt",
+      "prompt": "/4/prompt.txt"
     }
   ],
   "redaction": {
