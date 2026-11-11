@@ -21,9 +21,15 @@ function asLonLat(value: unknown): [number, number] | null {
 /**
  * The only coordinates a vehicle may be plotted at: a server-reported fix.
  *
- * Deliberately excludes route geometry midpoints and any hardcoded city
- * fallback — a unit with no GPS ping has no location, and inventing one is a
- * lie that outranks any map dot.
+ * Deliberately excludes corridor midpoints (dense route geometry) and any
+ * hardcoded city fallback — a unit with no GPS ping has no location, and
+ * inventing one is a lie that outranks any map dot. Exception: the middle of
+ * an exactly-3-point `[prev, curr, next]` path triple. The backend's
+ * invariant pass (telemetry_service) writes that triple with path[1] as the
+ * unit's true current fix, so some maritime/air payloads (edge snapshots,
+ * durable AIS caches) arrive carrying only the triple and no flat position
+ * field. Returning its middle point reports the server's own position; it is
+ * never a fabricated one. Longer paths are corridors, not fixes.
  */
 export function getVehicleFix(vehicle: FleetVehicle): [number, number] | null {
   const currentCoords = asLonLat((vehicle as { current_coords?: unknown }).current_coords);
@@ -46,6 +52,14 @@ export function getVehicleFix(vehicle: FleetVehicle): [number, number] | null {
   const lat = vAny.lat ?? vAny.latitude;
   if (typeof lon === 'number' && typeof lat === 'number' && Number.isFinite(lon) && Number.isFinite(lat)) {
     return [lon, lat];
+  }
+
+  // Server-reported [prev, curr, next] path triple with no flat position
+  // field: path[1] is the current fix by the backend's own invariant pass.
+  const path = (vehicle as { path?: unknown }).path;
+  if (Array.isArray(path) && path.length === 3) {
+    const mid = asLonLat(path[1]);
+    if (mid) return mid;
   }
 
   return null;
