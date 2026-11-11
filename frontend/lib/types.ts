@@ -137,6 +137,9 @@ export interface HoldVsRerouteEconomics {
   hold_reefer_cost_idr?: number;
   hold_spoilage_idr?: number;
   hold_wait_hours?: number;
+  // Phase 182-01: Single chokepoint corridor transparency & hold staging prioritization
+  single_chokepoint?: boolean;
+  single_chokepoint_note?: string;
 }
 
 export interface RouteLeg {
@@ -239,6 +242,9 @@ export interface RouteRecommendation {
     toll_cost_idr: number;
     total_operational_cost_idr: number;
   };
+  // Phase 182-01: Single chokepoint corridor transparency & hold staging prioritization
+  single_chokepoint?: boolean;
+  single_chokepoint_note?: string;
 }
 
 export type RouteDecisionType = 'APPROVE' | 'REJECT' | 'HOLD' | 'OVERRIDE';

@@ -1,6 +1,7 @@
 import type { LonLat } from './pathDensifier';
 export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
+export type { RouteRecommendation, HoldVsRerouteEconomics };
 import { findPrecomputedHubCorridor } from './hubCorridorCache';
 import {
   DEPOT_HOURLY_FEE_IDR,
@@ -2290,6 +2291,9 @@ export async function calculateAIDynamicDetourRoutes(
   let landDetourColor = '#34D399';
   let landDetourTag = 'RUTE ALTERNATIF ARTERI';
   let isDetourCompromised = false;
+  let isSingleChokepoint = false;
+  const singleChokepointNote =
+    'Koridor Pegunungan Tunggal: Tidak tersedia jalan alternatif bebas bencana dalam radius 80 km. Rute melintasi zona perkiraan risiko BMKG (Precautionary Risk) — disarankan pertimbangkan penahanan muatan (Hold Staging) atau konfirmasi satgas lapangan sebelum melintas.';
 
   // If primary route intersects hazard shockwave (or port access is blocked),
   // actively solve detour around hazard / closed-port perimeter via Dual-Layer Hazard Avoidance.
@@ -2396,8 +2400,9 @@ export async function calculateAIDynamicDetourRoutes(
 
     if (!foundDetour) {
       landDetourColor = '#F59E0B';
-      landDetourTag = 'DETOUR RISIKO MINIMAL (FRINGE)';
+      landDetourTag = 'KORIDOR TUNGGAL BERISIKO (TNGL)';
       isDetourCompromised = true;
+      isSingleChokepoint = true;
     }
   }
 
@@ -2405,7 +2410,9 @@ export async function calculateAIDynamicDetourRoutes(
     id: 'corridor-land-detour',
     route_name: isPrimaryCompromised ? 'Rute Pengalihan Darat (Detour)' : 'Alternatif Darat (Jalur Arteri)',
     description: isPrimaryCompromised
-      ? `Jalur pengalihan darat melingkari radius bahaya ${radiusKm}km via ${landDetourResult.summary}`
+      ? (isSingleChokepoint
+          ? `Jalur tunggal berisiko via ${landDetourResult.summary} (tanpa rute alternatif bebas bencana dalam radius 80km)`
+          : `Jalur pengalihan darat melingkari radius bahaya ${radiusKm}km via ${landDetourResult.summary}`)
       : `Jalur alternatif arteri bebas hambatan via ${landDetourResult.summary}`,
     waypoints: landDetourResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
     distance_km: landDetourResult.distanceKm,
@@ -2422,6 +2429,8 @@ export async function calculateAIDynamicDetourRoutes(
     viable: true,
     color: isPrimaryOffline ? '#EF4444' : landDetourColor,
     source: landDetourResult.source,
+    single_chokepoint: isSingleChokepoint || undefined,
+    single_chokepoint_note: isSingleChokepoint ? singleChokepointNote : undefined,
     legs: [
       {
         title: isPrimaryCompromised ? 'Pengalihan Darat / Detour' : 'Jalur Arteri Sekunder',
@@ -2461,6 +2470,13 @@ export async function calculateAIDynamicDetourRoutes(
       hazardType
     );
 
+    if (isSingleChokepoint) {
+      econ.single_chokepoint = true;
+      econ.single_chokepoint_note = singleChokepointNote;
+      econ.recommended_action = 'HOLD';
+      econ.rationale_id = `Koridor Pegunungan Tunggal: Tidak ada jalan alternatif bebas bencana. Menahan muatan di ${econ.hold_depot_name} (~${econ.estimated_clearance_hours} jam) diprioritaskan untuk menghindari risiko BMKG di koridor pegunungan.`;
+    }
+
     landPrimary.economic_comparison = econ;
     landDetour.economic_comparison = econ;
     seaCorridor.economic_comparison = econ;
@@ -2469,7 +2485,9 @@ export async function calculateAIDynamicDetourRoutes(
     holdCorridor = {
       id: 'corridor-hold-staging',
       route_name: `Tahan Muatan di Depo Buffer (${econ.hold_depot_name.split('(')[0].trim()})`,
-      description: `Rekomendasi Taktis: Tahan armada di ${econ.hold_depot_name} (~${econ.estimated_clearance_hours} jam) hingga air surut / jalan dibuka. Hemat Rp ${(econ.net_savings_idr / 1000000).toFixed(1)} Juta dibanding reroute.`,
+      description: isSingleChokepoint
+        ? `Rekomendasi Taktis (Koridor Tunggal): Tahan armada di ${econ.hold_depot_name} (~${econ.estimated_clearance_hours} jam) karena tidak tersedia jalur bypass darat bebas bencana.`
+        : `Rekomendasi Taktis: Tahan armada di ${econ.hold_depot_name} (~${econ.estimated_clearance_hours} jam) hingga air surut / jalan dibuka. Hemat Rp ${(econ.net_savings_idr / 1000000).toFixed(1)} Juta dibanding reroute.`,
       waypoints: [],
       distance_km: landPrimary.distance_km,
       eta_minutes: landPrimary.eta_minutes + econ.estimated_clearance_hours * 60,
@@ -2477,10 +2495,14 @@ export async function calculateAIDynamicDetourRoutes(
       risk_score: 0.10,
       is_compromised: false,
       safety_status: 'HOLD_DELAY',
-      safety_tag: `TAHAN MUATAN • REKOMENDASI ${econ.recommended_action}`,
+      safety_tag: isSingleChokepoint
+        ? 'TAHAN MUATAN • PRIORITAS KORIDOR TUNGGAL'
+        : `TAHAN MUATAN • REKOMENDASI ${econ.recommended_action}`,
       modality: 'truck',
       corridor_type: 'hold_staging',
       viable: true,
+      single_chokepoint: isSingleChokepoint || undefined,
+      single_chokepoint_note: isSingleChokepoint ? singleChokepointNote : undefined,
       economic_comparison: econ,
       color: '#F59E0B',
       legs: [

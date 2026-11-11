@@ -1338,6 +1338,8 @@ export function MitigationTab({
  return (
  <HoldVsRerouteCard
  economics={holdVsRerouteEconomics}
+ route={activeRoute}
+ rerouteCandidate={crisis.route_recommendations?.find((r) => r.corridor_type === 'land_detour')}
  onApplyTactical={(action) => {
  if (action === 'HOLD') {
  const holdIdx = crisis.route_recommendations?.findIndex(
