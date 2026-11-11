@@ -31,6 +31,27 @@ function fullDate(t: string): string {
   }
 }
 
+// Stable identities: recharts 3 stores axis/tooltip settings inside its own
+// Redux store and re-dispatches on every identity change. Object/element
+// literals passed inline are recreated on every parent render, which makes the
+// store notify → axis re-render → re-dispatch cycle self-sustaining
+// (React #185 "Maximum update depth exceeded", via recharts' internal
+// react-redux notifyNestedSubs). Keep every object/element prop module-level.
+const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 0 } as const;
+const X_TICK = { fill: '#94a3b8', fontSize: 11 } as const;
+const X_AXIS_LINE = { stroke: 'rgba(255,255,255,0.1)' } as const;
+const Y_TICK = { fill: '#64748b', fontSize: 11 } as const;
+const Y_DOMAIN = ['auto', 'auto'] as const;
+const TOOLTIP_CURSOR = { stroke: 'rgba(255,255,255,0.15)' } as const;
+const AVG_LABEL = { value: 'rata-rata', position: 'insideTopRight', fill: '#64748b', fontSize: 11 } as const;
+const ACTIVE_DOT = { r: 4 } as const;
+
+function yAxisTickFormatter(v: number): string {
+  return Math.abs(v) >= 1000
+    ? `${(v / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}rb`
+    : String(v);
+}
+
 function TrendTooltip({ active, payload, meta }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
@@ -108,6 +129,14 @@ export function PriceTrendChart({
     [data],
   );
 
+  // Tooltip content element must be identity-stable: a fresh element (with a
+  // fresh `meta` object) on every render re-dispatches recharts' internal
+  // tooltip settings store on every parent re-render.
+  const tooltipContent = useMemo(
+    () => <TrendTooltip meta={{ commodity: commodityLabel, region: regionLabel }} />,
+    [commodityLabel, regionLabel],
+  );
+
   if (loading) {
     return (
       <div className="h-64 rounded-lg bg-white/5 motion-safe:animate-pulse" aria-hidden="true" />
@@ -132,7 +161,7 @@ export function PriceTrendChart({
       aria-label={`Tren harga ${commodityLabel}: ${data.length} titik`}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+        <ComposedChart data={data} margin={CHART_MARGIN}>
           <defs>
             <linearGradient id="analyticsTrendFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#38b8f8" stopOpacity={0.35} />
@@ -142,32 +171,28 @@ export function PriceTrendChart({
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+            tick={X_TICK}
+            axisLine={X_AXIS_LINE}
             tickLine={false}
             minTickGap={24}
           />
           <YAxis
-            tickFormatter={(v: number) =>
-              Math.abs(v) >= 1000
-                ? `${(v / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}rb`
-                : String(v)
-            }
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tickFormatter={yAxisTickFormatter}
+            tick={Y_TICK}
             axisLine={false}
             tickLine={false}
             width={52}
-            domain={['auto', 'auto']}
+            domain={Y_DOMAIN}
           />
           <Tooltip
-            content={<TrendTooltip meta={{ commodity: commodityLabel, region: regionLabel }} />}
-            cursor={{ stroke: 'rgba(255,255,255,0.15)' }}
+            content={tooltipContent}
+            cursor={TOOLTIP_CURSOR}
           />
           <ReferenceLine
             y={avg}
             stroke="#64748b"
             strokeDasharray="4 3"
-            label={{ value: 'rata-rata', position: 'insideTopRight', fill: '#64748b', fontSize: 11 }}
+            label={AVG_LABEL}
           />
           <Area type="monotone" dataKey="harga" name="Harga" fill="url(#analyticsTrendFill)" stroke="transparent" />
           <Line
@@ -177,7 +202,7 @@ export function PriceTrendChart({
             stroke="#38b8f8"
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4 }}
+            activeDot={ACTIVE_DOT}
           />
         </ComposedChart>
       </ResponsiveContainer>

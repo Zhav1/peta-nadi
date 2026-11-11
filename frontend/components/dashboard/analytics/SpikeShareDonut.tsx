@@ -38,6 +38,10 @@ function DonutTooltip({ active, payload }: any) {
   );
 }
 
+// Stable identity: recharts re-dispatches its internal tooltip settings store
+// whenever the `content` element identity changes (see PriceTrendChart note).
+const DONUT_TOOLTIP_CONTENT = <DonutTooltip />;
+
 /**
  * Part-to-whole kategorikal → donat: pangsa spike maksimum per wilayah.
  * Warna sel mengikuti ramp severity 5/10/15% (sinkron badge + heatmap),
@@ -95,7 +99,7 @@ export function SpikeShareDonut({
       >
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Tooltip content={<DonutTooltip />} />
+            <Tooltip content={DONUT_TOOLTIP_CONTENT} />
             <Pie
               data={slices}
               dataKey="value"
