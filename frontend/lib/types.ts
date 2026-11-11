@@ -239,6 +239,21 @@ export interface RouteRecommendation {
     toll_cost_idr: number;
     total_operational_cost_idr: number;
   };
+  hazard_intersection?: {
+    has_intersection: boolean;
+    has_detour: boolean;
+    affected_segment_indices: number[];
+    affected_segments: Array<{
+      segment_index: number;
+      start: [number, number];
+      end: [number, number];
+      hazard_type?: string;
+      tier?: string;
+    }>;
+    note: string;
+    risk_level: string;
+    estimated_delay_minutes: number;
+  };
 }
 
 export type RouteDecisionType = 'APPROVE' | 'REJECT' | 'HOLD' | 'OVERRIDE';
@@ -295,6 +310,9 @@ export interface CrisisState {
   title: string;
   type: CrisisType;
   severity?: Severity;
+  tier?: 'CONFIRMED' | 'WATCH' | 'ADVISORY' | string;
+  sources?: string[];
+  geometry_role?: string;
   is_simulated: boolean;
   lat: number;
   lon: number;
@@ -452,6 +470,11 @@ export interface DisasterZone {
   crisis_id?: string;
   id?: string;
   zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
+  tier?: 'CONFIRMED' | 'WATCH' | 'ADVISORY' | string;
+  geometry_role?: 'buffer_footprint' | 'advisory_area' | string;
+  sources?: string[];
+  confidence?: number;
+  reason?: string;
   /** Set only for early-warning forecasts; rendered dashed/zero-fill on the map. */
   forecast_tag?: ForecastTag | null;
   /** ISO timestamp after which the forecast tag must not be rendered. */
@@ -468,6 +491,59 @@ export interface DisasterZone {
   verification_audit?: VerificationAudit;
   impact_profile?: HazardImpactProfile;
   affected_locations?: AffectedLocationNode[];
+}
+
+export type HazardConsensusTier = 'CONFIRMED' | 'WATCH' | 'ADVISORY';
+export type HazardGeometryRole = 'buffer_footprint' | 'advisory_area' | string;
+
+export interface HazardConsensusRecord {
+  id: string;
+  type: string;
+  tier: HazardConsensusTier;
+  confidence: number;
+  sources: string[];
+  geometry: any;
+  geometry_role: HazardGeometryRole;
+  reason: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | string;
+  title: string;
+  center: { lat: number; lon: number } | null;
+  radius_km: number | null;
+  llm_used: boolean;
+  updated_at: string;
+  expires_at: string;
+}
+
+export interface HazardConsensusResponse {
+  status: string;
+  generated_at: string;
+  total: number;
+  records: HazardConsensusRecord[];
+}
+
+export interface RouteCheckHazard {
+  hazard_id: string;
+  type: string;
+  tier: string;
+  severity: string;
+  note: string;
+  geometry_role?: string;
+  affected_segment_indices: number[];
+  affected_segments: Array<{
+    segment_index: number;
+    start: [number, number];
+    end: [number, number];
+  }>;
+  estimated_delay_minutes: number;
+}
+
+export interface RouteCheckResponse {
+  intersects_hazard: boolean;
+  total_hazards: number;
+  hazards: RouteCheckHazard[];
+  risk_level: 'low' | 'medium' | 'high' | 'critical' | string;
+  estimated_extra_delay_minutes: number;
+  evaluated_at?: string;
 }
 
 // PIHPS price chart data

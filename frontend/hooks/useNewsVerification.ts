@@ -118,18 +118,18 @@ export interface NewsItem {
 // Province buckets + honest confidence (Phase 172 / M9, SPEC decisions 7 + 8)
 // ---------------------------------------------------------------------------
 
-/** The ten Sumatra provinces, in display order, plus the area-wide bucket. */
+/** The ten Sumatra provinces (alphabetical). Groups in the UI are sorted by latest article time then severity. */
 export const SUMATRA_PROVINCE_ORDER = [
   'Aceh',
-  'Sumatera Utara',
-  'Sumatera Barat',
-  'Riau',
-  'Kepulauan Riau',
-  'Jambi',
-  'Sumatera Selatan',
   'Bangka Belitung',
   'Bengkulu',
+  'Jambi',
+  'Kepulauan Riau',
   'Lampung',
+  'Riau',
+  'Sumatera Barat',
+  'Sumatera Selatan',
+  'Sumatera Utara',
 ] as const;
 
 export const AREA_WIDE_PROVINCE = 'Sumatera';

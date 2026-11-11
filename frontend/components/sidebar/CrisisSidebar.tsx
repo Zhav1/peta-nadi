@@ -109,16 +109,17 @@ export function CrisisSidebar({
  <span className="text-xs text-slate-400 tabular-nums">
  {confidencePct === null ? 'Keyakinan belum tersedia' : `${confidencePct}% yakin`}
  </span>
- {crisis.zone_tier === 'RED_CONFIRMED' && (
  <span className="text-xs text-slate-300">
- Bahaya
+ {crisis.tier === 'CONFIRMED'
+   ? 'Terkonfirmasi'
+   : crisis.tier === 'WATCH'
+     ? 'Pantauan'
+     : crisis.tier === 'ADVISORY'
+       ? 'Peringatan'
+       : crisis.zone_tier === 'RED_CONFIRMED'
+         ? 'Bahaya'
+         : 'Waspada'}
  </span>
- )}
- {crisis.zone_tier === 'YELLOW_CLARIFY' && (
- <span className="text-xs text-slate-300">
- Waspada
- </span>
- )}
  {crisis.is_simulated && (
  <span className="text-xs text-slate-500">
  Simulasi
@@ -131,6 +132,16 @@ export function CrisisSidebar({
  <p className="text-xs text-slate-400 font-mono mt-0.5">
  {normalizeRegion(crisis.region)}
  </p>
+ {crisis.tier_reason && (
+ <div className="mt-2.5 p-2 rounded-lg bg-[#121822] border border-white/10 space-y-1">
+   <p className="text-xs text-slate-200 font-sans leading-relaxed">{crisis.tier_reason}</p>
+   {((crisis as any).sources?.length || (crisis as any).sources_label) && (
+     <p className="text-[11px] text-slate-400 font-mono">
+       Sumber: {Array.isArray((crisis as any).sources) ? (crisis as any).sources.join(', ') : String((crisis as any).sources_label || '')}
+     </p>
+   )}
+ </div>
+ )}
  </div>
  <button
  id="sidebar-close-btn"

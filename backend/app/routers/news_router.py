@@ -263,7 +263,17 @@ def apply_breadth_contract(
     for row in capped:
         groups.setdefault(normalize_province(row.get("province") or row.get("region")), []).append(row)
 
-    ordered_provinces = sorted(groups, key=_province_sort_key)
+    def _province_round_robin_key(prov: str) -> tuple[int, float, str]:
+        items = groups.get(prov, [])
+        latest_ts = 0.0
+        for it in items:
+            dt = _parse_published_at(it)
+            if dt:
+                latest_ts = max(latest_ts, dt.timestamp())
+        area_rank = 1 if prov == AREA_WIDE_PROVINCE else 0
+        return (area_rank, -latest_ts, prov)
+
+    ordered_provinces = sorted(groups, key=_province_round_robin_key)
 
     # 3. Round-robin: every province with ≥1 qualifying article lands in the
     #    first page before any province gets a second slot.

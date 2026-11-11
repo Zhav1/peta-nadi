@@ -52,10 +52,6 @@ import {
   EyeOff,
   RotateCcw,
   Newspaper,
-  AlertTriangle,
-  Waves,
-  Flame,
-  Activity,
 } from 'lucide-react';
 import {
  Popover,
@@ -474,20 +470,6 @@ export default function CrisisMap({
 
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
   const isMapLoadedRef = useRef(false);
-
-  // Google Maps-style Crisis Detail Card State
-  const [selectedCrisisCard, setSelectedCrisisCard] = useState<{
-    id: string;
-    title: string;
-    type: string;
-    location: string;
-    radiusKm: number;
-    sourceBadge: string;
-    impactedCorridors: string;
-    center: [number, number];
-    zoneTier: string;
-    zone?: DisasterZone;
-  } | null>(null);
 
   // Tier 2 Pan-Sumatra Gazetteer & Search State
   const [gazetteerNodes, setGazetteerNodes] = useState<GeocodeNode[]>(PAN_SUMATRA_GAZETTEER);
@@ -1357,15 +1339,22 @@ export default function CrisisMap({
         source: 'disaster-zones-source',
         paint: {
           'fill-color': [
-            'match', ['get', 'zone_tier'],
-            'RED_CONFIRMED', '#f87171',
-            'YELLOW_CLARIFY', '#f59e0b',
-            'rgba(248, 113, 113, 0.30)',
+            'match', ['get', 'tier'],
+            'CONFIRMED', '#f87171',
+            'WATCH', '#f59e0b',
+            'ADVISORY', 'rgba(245, 158, 11, 0.08)',
+            [
+              'match', ['get', 'zone_tier'],
+              'RED_CONFIRMED', '#f87171',
+              'YELLOW_CLARIFY', '#f59e0b',
+              'rgba(248, 113, 113, 0.30)',
+            ]
           ],
           'fill-opacity': [
             'case',
+            ['any', ['==', ['get', 'tier'], 'ADVISORY'], ['==', ['get', 'geometry_role'], 'advisory_area']], 0.10,
             ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'], 0,
-            ['==', ['get', 'tier'], 'WATCH'], 0.14,
+            ['==', ['get', 'tier'], 'WATCH'], 0.18,
             ['match', ['get', 'zone_tier'],
               'RED_CONFIRMED', 0.28,
               'YELLOW_CLARIFY', 0.24,
@@ -1383,18 +1372,26 @@ export default function CrisisMap({
         filter: ['!=', ['get', 'forecast_tag'], 'FORECAST_WASPADA'],
         paint: {
           'line-color': [
-            'match', ['get', 'zone_tier'],
-            'RED_CONFIRMED', '#f87171',
-            'YELLOW_CLARIFY', '#f59e0b',
-            '#f87171',
+            'match', ['get', 'tier'],
+            'CONFIRMED', '#f87171',
+            'WATCH', '#f59e0b',
+            'ADVISORY', 'rgba(245, 158, 11, 0.45)',
+            [
+              'match', ['get', 'zone_tier'],
+              'RED_CONFIRMED', '#f87171',
+              'YELLOW_CLARIFY', '#f59e0b',
+              '#f87171',
+            ]
           ],
           'line-width': [
             'case',
+            ['any', ['==', ['get', 'tier'], 'ADVISORY'], ['==', ['get', 'geometry_role'], 'advisory_area']], 1.0,
             ['==', ['get', 'tier'], 'WATCH'], 1.5,
             2.5,
           ],
           'line-opacity': [
             'case',
+            ['any', ['==', ['get', 'tier'], 'ADVISORY'], ['==', ['get', 'geometry_role'], 'advisory_area']], 0.50,
             ['==', ['get', 'tier'], 'WATCH'], 0.65,
             0.95,
           ],
@@ -1543,6 +1540,27 @@ export default function CrisisMap({
           'line-color': ['coalesce', ['get', 'color'], '#38b8f8'],
           // Direct-land corridors are the highlighted/default story; island-ring legs stay thinner.
           'line-width': ['case', ['==', ['get', 'isDirectLand'], true], 6.5, 5],
+          'line-opacity': 0.95,
+        },
+      });
+
+      // 2b-hazard. Route Hazard Affected Segments (distinct dashed segment style for non-detoured routes passing hazard)
+      map.addSource('route-hazard-segments-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'route-hazard-segments-line',
+        type: 'line',
+        source: 'route-hazard-segments-source',
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': '#ef4444',
+          'line-width': 7.5,
+          'line-dasharray': [2, 2],
           'line-opacity': 0.95,
         },
       });
@@ -1947,6 +1965,11 @@ export default function CrisisMap({
           risk: Number(props.risk ?? 0.85),
           crisis_id: props.crisis_id || props.id || undefined,
           id: props.id || props.crisis_id || undefined,
+          tier: props.tier || (props.zone_tier === 'RED_CONFIRMED' ? 'CONFIRMED' : 'WATCH'),
+          geometry_role: props.geometry_role || 'buffer_footprint',
+          sources: props.sources_label ? String(props.sources_label).split(', ') : (props.source ? [String(props.source)] : []),
+          confidence: props.confidence != null ? Number(props.confidence) : 0.85,
+          reason: props.tier_reason || '',
           zone_tier: props.forecast_tag === 'FORECAST_WASPADA'
             ? 'YELLOW_CLARIFY'
             : ((props.zone_tier as any) || 'RED_CONFIRMED'),
@@ -1962,21 +1985,6 @@ export default function CrisisMap({
           radiusKm: props.radiusKm != null ? Number(props.radiusKm) : 15,
           impact_profile,
         } as unknown as import('@/lib/types').DisasterZone;
-        const centerCoords: [number, number] = (props.center_lon != null && props.center_lat != null
-          ? [Number(props.center_lon), Number(props.center_lat)]
-          : (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : [100.5, 0.5]));
-        setSelectedCrisisCard({
-          id: String(props.id || props.crisis_id || 'disaster-zone'),
-          title: String(props.title || props.custom_hazard_label || 'Zona Disrupsi Bencana'),
-          type: String(props.type || 'flood'),
-          location: 'Indonesia • Sumatra Logistics Corridor',
-          radiusKm: props.radiusKm != null ? Number(props.radiusKm) : 20,
-          sourceBadge: String(props.source || props.source_name || 'BMKG CAP / GloFAS / GDACS'),
-          impactedCorridors: String(props.impacted_corridors || props.tier_reason || 'Jalan Lintas Sumatera & Koridor Arteri Logistik'),
-          center: centerCoords,
-          zoneTier: String(props.zone_tier || 'RED_CONFIRMED'),
-          zone,
-        });
         onZoneClickRef.current?.(zone);
         return;
       };
@@ -2456,6 +2464,35 @@ export default function CrisisMap({
         type: 'FeatureCollection',
         features: routeFeatures,
       });
+
+      // Update Hazard Affected Segments (dashed highlight for non-detoured routes passing hazard)
+      const hazardSegmentsSource = map.getSource('route-hazard-segments-source') as mapboxgl.GeoJSONSource | undefined;
+      if (hazardSegmentsSource) {
+        const activeRoute = activeRoutes[targetIdx];
+        const hz = activeRoute?.hazard_intersection;
+        if (hz?.has_intersection && hz.has_detour === false && hz.affected_segments?.length) {
+          const segFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = hz.affected_segments.map((seg, idx) => ({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [seg.start, seg.end],
+            },
+            properties: {
+              index: idx,
+              risk_level: hz.risk_level,
+            },
+          }));
+          hazardSegmentsSource.setData({
+            type: 'FeatureCollection',
+            features: segFeatures,
+          });
+        } else {
+          hazardSegmentsSource.setData({
+            type: 'FeatureCollection',
+            features: [],
+          });
+        }
+      }
     }
 
     // 2b. Update Congestion Segments (route-scoped + TomTom macro segments)
@@ -2532,7 +2569,9 @@ export default function CrisisMap({
         const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat ?? null);
         const sourceCount = Number((z as any).source_count ?? (Array.isArray((z as any).sources) ? (z as any).sources.length : ((z as any).source ? 1 : 1)));
         const tier = (z as any).tier || (sourceCount >= 2 ? 'CONFIRMED' : 'WATCH');
+        const geometryRole = (z as any).geometry_role || (tier === 'ADVISORY' ? 'advisory_area' : 'buffer_footprint');
         const sourcesLabel = Array.isArray((z as any).sources) ? (z as any).sources.join(', ') : ((z as any).source || (z as any).source_name || 'sensor');
+        const confidence = (z as any).confidence != null ? Number((z as any).confidence) : (tier === 'CONFIRMED' ? 0.9 : 0.65);
 
         zoneFeatures.push({
           type: 'Feature',
@@ -2543,15 +2582,17 @@ export default function CrisisMap({
           properties: {
             id: (z as any).id || (z as any).crisis_id || '',
             tier,
+            geometry_role: geometryRole,
+            confidence,
             sources_label: sourcesLabel,
             type: z.type,
             risk: z.risk,
             crisis_id: (z as any).crisis_id || (z as any).id || '',
-            zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
+            zone_tier: (z as any).zone_tier || (tier === 'CONFIRMED' ? 'RED_CONFIRMED' : 'YELLOW_CLARIFY'),
             forecast_tag: (z as any).forecast_tag || '',
             forecast_valid_until: (z as any).forecast_valid_until || '',
             title: (z as any).title || '',
-            tier_reason: (z as any).tier_reason || '',
+            tier_reason: (z as any).tier_reason || (z as any).reason || '',
             custom_hazard_label: (z as any).custom_hazard_label || '',
             source_news_id: (z as any).source_news_id || '',
             source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
@@ -2580,6 +2621,12 @@ export default function CrisisMap({
         if (centerLon != null && centerLat != null && Number.isFinite(Number(centerLon)) && Number.isFinite(Number(centerLat))) {
           const lon = Number(centerLon);
           const lat = Number(centerLat);
+          const sourceCount = Number((z as any).source_count ?? (Array.isArray((z as any).sources) ? (z as any).sources.length : ((z as any).source ? 1 : 1)));
+          const tier = (z as any).tier || (sourceCount >= 2 ? 'CONFIRMED' : 'WATCH');
+          const isAdvisory = tier === 'ADVISORY' || (z as any).geometry_role === 'advisory_area';
+          const rawTitle = (z as any).title || (z as any).custom_hazard_label || 'Zona Bencana';
+          const displayLabel = isAdvisory ? `Peringatan: ${rawTitle}` : rawTitle;
+
           markerFeatures.push({
             type: 'Feature',
             geometry: {
@@ -2589,9 +2636,11 @@ export default function CrisisMap({
             properties: {
               id: (z as any).id || (z as any).crisis_id || '',
               type: z.type || 'flood',
-              title: (z as any).title || 'Zona Bencana',
-              display_label: (z as any).custom_hazard_label || (z as any).title || 'Peringatan Bencana',
-              zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
+              tier,
+              geometry_role: (z as any).geometry_role || (tier === 'ADVISORY' ? 'advisory_area' : 'buffer_footprint'),
+              title: rawTitle,
+              display_label: displayLabel,
+              zone_tier: (z as any).zone_tier || (tier === 'CONFIRMED' ? 'RED_CONFIRMED' : 'YELLOW_CLARIFY'),
               radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 0.6,
               source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
               impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
@@ -3903,92 +3952,7 @@ export default function CrisisMap({
         </div>
       )}
 
-      {/* Google Maps-Style Bottom/Floating Crisis Detail Card */}
-      {selectedCrisisCard && (
-        <div
-          role="dialog"
-          aria-label="Detail Bencana Koridor"
-          className="absolute bottom-6 left-6 z-[380] w-[calc(100vw-3rem)] sm:w-[420px] max-w-[calc(100vw-3rem)] rounded-2xl backdrop-blur-md bg-[#0c0e12]/90 border border-white/10 shadow-[0_16px_48px_rgba(0,0,0,0.6)] p-5 text-white transition-all duration-200 animate-in fade-in slide-in-from-bottom-4"
-        >
-          {/* Header Row */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#f4b4b4]/20 border border-[#f4b4b4]/40 flex items-center justify-center shrink-0">
-                {selectedCrisisCard.type === 'flood' ? (
-                  <Waves className="w-5 h-5 text-[#f87171]" />
-                ) : selectedCrisisCard.type === 'wildfire' ? (
-                  <Flame className="w-5 h-5 text-[#f97316]" />
-                ) : selectedCrisisCard.type === 'earthquake' ? (
-                  <Activity className="w-5 h-5 text-[#fb7185]" />
-                ) : (
-                  <AlertTriangle className="w-5 h-5 text-[#f87171]" />
-                )}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight leading-snug">
-                  {selectedCrisisCard.title}
-                </h3>
-                <p className="text-xs text-[rgba(232,234,237,0.65)] flex items-center gap-1.5 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-white/50" />
-                  <span>{selectedCrisisCard.location || 'Indonesia • Sumatra Logistics Corridor'}</span>
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedCrisisCard(null)}
-              className="cursor-pointer p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Tutup detail bencana"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Badges / Metrics Row */}
-          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-white/[0.08]">
-            <div className="px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono font-medium flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-              <span>Radius: {selectedCrisisCard.radiusKm} km</span>
-            </div>
-            <div className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs font-mono">
-              <span>Sumber: {selectedCrisisCard.sourceBadge}</span>
-            </div>
-          </div>
-
-          {/* Impacted Corridors */}
-          <div className="mt-3.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-white/50 block mb-1">
-              Koridor Logistik Terdampak
-            </span>
-            <p className="text-xs text-white/90 leading-relaxed font-sans">
-              {selectedCrisisCard.impactedCorridors}
-            </p>
-          </div>
-
-          {/* Action CTA Button */}
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedCrisisCard.zone) {
-                  onZoneClickRef.current?.(selectedCrisisCard.zone);
-                }
-                if (selectedCrisisCard.center && mapRef.current) {
-                  mapRef.current.flyTo({
-                    center: selectedCrisisCard.center,
-                    zoom: 9.5,
-                    duration: 1000,
-                  });
-                }
-              }}
-              className="cursor-pointer flex-1 py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-150 shadow-sm"
-            >
-              <Navigation className="w-4 h-4 text-[#38bdf8]" />
-              <span>Hitung / Lihat Rute Pengalihan</span>
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Google Maps-Style Bottom/Floating Crisis Detail Card removed in favor of right-side CrisisSidebar only */}
     </div>
   );
 }

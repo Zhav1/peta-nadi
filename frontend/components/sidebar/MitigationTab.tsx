@@ -298,6 +298,20 @@ function RouteCard({
  </p>
 
  {/* Non-Viable Callout Warning */}
+ {route.hazard_intersection?.has_intersection && !route.hazard_intersection?.has_detour && (
+ <div className="mb-2 p-2.5 rounded-lg border border-amber-500/30 bg-amber-950/20 text-xs text-amber-200 space-y-1">
+   <div className="flex items-center justify-between">
+     <span className="font-semibold text-amber-300">Melewati area bahaya</span>
+     <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200">
+       Risiko: {route.hazard_intersection.risk_level === 'critical' ? 'Kritis' : route.hazard_intersection.risk_level === 'high' ? 'Tinggi' : route.hazard_intersection.risk_level === 'medium' ? 'Sedang' : 'Rendah'}
+     </span>
+   </div>
+   <p className="text-amber-200/90 leading-snug font-sans">
+     {route.hazard_intersection.note || 'Melewati area bahaya. Tidak ada rute alternatif.'}
+     {route.hazard_intersection.estimated_delay_minutes ? ` Perkiraan tambahan ${route.hazard_intersection.estimated_delay_minutes} menit.` : ''}
+   </p>
+ </div>
+ )}
  {isNonViable && route.non_viable_reason && (
  <div className="mb-2 text-xs text-slate-500 flex items-start gap-2">
  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />

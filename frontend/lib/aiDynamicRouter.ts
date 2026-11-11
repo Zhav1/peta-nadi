@@ -3,6 +3,11 @@ export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
 import { findPrecomputedHubCorridor } from './hubCorridorCache';
 import {
+  routeIntersectsPolygonRing,
+  findRouteIntersectingSegments,
+  type LonLatRing,
+} from './polygonGeom';
+import {
   DEPOT_HOURLY_FEE_IDR,
   DRIVER_LABOR_HOURLY_RATE,
   REEFER_GENSET_HOURLY_RATE,
@@ -771,7 +776,8 @@ export function calculateHazardExposureMetrics(
   polyline: LonLat[],
   hazardCenter: LonLat,
   radiusKm: number,
-  dangerBufferKm: number = 2.0
+  dangerBufferKm: number = 2.0,
+  hazardPolygon?: LonLatRing | null
 ): HazardExposureMetrics {
   if (!polyline || polyline.length === 0) {
     return {
@@ -783,6 +789,9 @@ export function calculateHazardExposureMetrics(
       riskPenaltyScore: 0,
     };
   }
+
+  const hasPolygon = Boolean(hazardPolygon && Array.isArray(hazardPolygon) && hazardPolygon.length >= 3);
+  const polyIntersecting = hasPolygon ? routeIntersectsPolygonRing(polyline, hazardPolygon!) : false;
 
   const effectiveRadius = radiusKm + dangerBufferKm;
   let totalLengthKm = 0;
@@ -812,13 +821,18 @@ export function calculateHazardExposureMetrics(
         if (closestDist < minDistance) minDistance = closestDist;
       }
 
-      if (closestDist <= effectiveRadius) {
+      if (hasPolygon) {
+        const segIntersects = routeIntersectsPolygonRing([A, B], hazardPolygon!);
+        if (segIntersects) {
+          exposedLengthKm += segLength;
+        }
+      } else if (closestDist <= effectiveRadius) {
         exposedLengthKm += segLength;
       }
     }
   }
 
-  const isIntersecting = minDistance <= effectiveRadius;
+  const isIntersecting = hasPolygon ? polyIntersecting : minDistance <= effectiveRadius;
   const penetrationRatio = totalLengthKm > 0 ? Math.min(1.0, exposedLengthKm / totalLengthKm) : 0;
   const maxProximity = isIntersecting
     ? Math.max(0, Math.min(1.0, 1.0 - minDistance / effectiveRadius))
@@ -2158,7 +2172,8 @@ export async function calculateAIDynamicDetourRoutes(
     vehicleGolongan?: string | null;
     tollCostIdr?: number | null;
   },
-  hazardEvidence?: HazardEvidenceContext
+  hazardEvidence?: HazardEvidenceContext,
+  hazardPolygon?: LonLatRing | null
 ): Promise<RouteRecommendation[]> {
   void zoneTier;
   void _modality;
@@ -2221,8 +2236,8 @@ export async function calculateAIDynamicDetourRoutes(
   }
 
   const primaryRes = mapboxResults[0];
-  const primaryMetrics = hazardCenter
-    ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter, radiusKm)
+  const primaryMetrics = (hazardCenter || hazardPolygon)
+    ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter || [0, 0], radiusKm, 2.0, hazardPolygon)
     : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
   // Port-closure near origin/destination blocks port access roads even when the
   // polyline itself skirts the circle: users often click "near Pelabuhan Asal".
@@ -2610,6 +2625,21 @@ export async function calculateAIDynamicDetourRoutes(
 
   // STEP 5 (Phase 106): Attach first-principles trip operational cost engine to ALL corridors
   attachOperationalCostsToCorridors(allCorridors, costOptions);
+
+  if (primaryMetrics.isIntersecting || landPrimary.is_compromised) {
+    const hasViableDetour = allCorridors.slice(1).some((r) => r.viable && r.safety_status !== 'COMPROMISED' && r.corridor_type !== 'hold_staging');
+    const affected = hazardPolygon ? findRouteIntersectingSegments(primaryRes.coordinates, hazardPolygon) : [];
+    const extraDelayMins = Math.max(15, Math.round(primaryMetrics.exposureKm * 3.5));
+    landPrimary.hazard_intersection = {
+      has_intersection: true,
+      has_detour: hasViableDetour,
+      affected_segment_indices: affected.map((s) => s.segment_index),
+      affected_segments: affected,
+      note: hasViableDetour ? 'Melewati area bahaya. Rute alternatif tersedia.' : 'Melewati area bahaya. Tidak ada rute alternatif.',
+      risk_level: zoneTier === 'RED_CONFIRMED' ? 'high' : 'medium',
+      estimated_delay_minutes: extraDelayMins,
+    };
+  }
 
   return allCorridors;
 }

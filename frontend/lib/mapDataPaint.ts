@@ -43,7 +43,7 @@ export const FLEET_DOTS_PAINT: Record<string, unknown> = {
   ],
   'circle-color': [
     'case',
-    ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(0,0,0,0)',
+    ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], MAP_KEYLINE,
     ['==', ['get', 'modality'], 'truck'], MODALITY_COLOR.truck,
     ['==', ['get', 'modality'], 'maritime'], MODALITY_COLOR.maritime,
     ['==', ['get', 'modality'], 'air'], MODALITY_COLOR.air,
@@ -84,7 +84,7 @@ export const FLEET_DOTS_PAINT: Record<string, unknown> = {
       ['all',
         ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'],
         ['!=', ['get', 'isImpacted'], true],
-      ], 0.45,
+      ], 0.85,
       1.0,
     ],
   ],

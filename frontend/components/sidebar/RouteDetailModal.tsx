@@ -153,11 +153,42 @@ export function RouteDetailModal({
   const eligibleTrips = operationalTrips.filter((trip) => ['planned', 'moving', 'rerouted'].includes(trip.status));
   const selectedTrip = eligibleTrips.find((trip) => trip.id === selectedTravelId);
 
+  const [tripHazardCheck, setTripHazardCheck] = useState<import('@/lib/types').RouteCheckResponse | null>(null);
+  const [checkingTripHazard, setCheckingTripHazard] = useState(false);
+
+  useEffect(() => {
+    if (!open || !selectedTrip) {
+      setTripHazardCheck(null);
+      return;
+    }
+    const tripRoute = (selectedTrip.approved_route as any)?.coordinates
+      || selectedTrip.approved_route?.waypoints?.map((w: any) => [w.lon, w.lat])
+      || (selectedTrip.origin_coords && selectedTrip.dest_coords ? [selectedTrip.origin_coords, selectedTrip.dest_coords] : null);
+
+    if (!tripRoute || tripRoute.length < 2) {
+      setTripHazardCheck(null);
+      return;
+    }
+
+    setCheckingTripHazard(true);
+    let cancelled = false;
+    api.hazards.checkRoute(tripRoute)
+      .then((res) => { if (!cancelled) setTripHazardCheck(res); })
+      .catch(() => { if (!cancelled) setTripHazardCheck(null); })
+      .finally(() => { if (!cancelled) setCheckingTripHazard(false); });
+
+    return () => { cancelled = true; };
+  }, [open, selectedTrip]);
+
+  const tripIntersectsHazard = tripHazardCheck != null
+    ? tripHazardCheck.intersects_hazard
+    : Boolean(route.hazard_intersection?.has_intersection);
+
   // Forecast info-only: every decision CTA stays disabled — pantau saja.
   const isForecast = !!crisis && isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
-  const canApprove = !isForecast && !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip;
-  const canHold = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0;
-  const canOverride = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip;
+  const canApprove = !isForecast && !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip && tripIntersectsHazard;
+  const canHold = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && (!selectedTrip || tripIntersectsHazard);
+  const canOverride = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip && tripIntersectsHazard;
 
   const passability =
     crisis?.impact_profile?.passability ??
@@ -325,6 +356,20 @@ export function RouteDetailModal({
                 <span className="text-slate-400">Radius zona:</span>
                 <span>{hazardRadius != null ? `${hazardRadius} km` : 'Data tidak tersedia'}</span>
               </div>
+              {route.hazard_intersection?.has_intersection && !route.hazard_intersection?.has_detour && (
+                <div className="p-2.5 rounded-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-1 mt-1">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>Melewati area bahaya</span>
+                    <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                      Risiko: {route.hazard_intersection.risk_level === 'critical' ? 'Kritis' : route.hazard_intersection.risk_level === 'high' ? 'Tinggi' : route.hazard_intersection.risk_level === 'medium' ? 'Sedang' : 'Rendah'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-sans text-amber-200/90 leading-relaxed">
+                    {route.hazard_intersection.note || 'Melewati area bahaya. Tidak ada rute alternatif.'}
+                    {route.hazard_intersection.estimated_delay_minutes ? ` Perkiraan tambahan ${route.hazard_intersection.estimated_delay_minutes} menit.` : ''}
+                  </p>
+                </div>
+              )}
               {route.dasar_risiko && (
                 <p className="text-xs font-sans text-slate-200 leading-relaxed pt-1 border-t border-white/5">
                   {route.dasar_risiko}
@@ -716,65 +761,78 @@ export function RouteDetailModal({
                 {isSimulatedRoute && (
                   <p className="text-xs text-amber-300/90">Rute simulasi/offline atau belum grounded; perubahan operasional dinonaktifkan.</p>
                 )}
-                {/* Single CTA row */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAction('APPROVE', 'REROUTE')}
-                    disabled={!canApprove}
-                    aria-label={role === 'REGULATOR' ? 'SETUJUI [Khusus Dispatcher]' : 'SETUJUI'}
-                    title={
-                      role === 'REGULATOR'
-                        ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
-                        : !hasEvidence || isSimulatedRoute
-                        ? 'Bukti atau rute grounded belum memenuhi syarat'
-                        : !selectedTrip
-                        ? 'Pilih trip eligible terlebih dahulu'
-                        : !allChecked
-                        ? 'Lengkapi 4/4 verifikasi checklist'
-                        : 'Setujui pengalihan rute armada'
-                    }
-                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all "
-                  >
-                    <span>Pratinjau Pengalihan</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAction('HOLD', 'HOLD')}
-                    disabled={!canHold}
-                    aria-label="TAHAN"
-                    title={
-                      !notes.trim()
-                        ? 'Wajib mengisi catatan operator untuk aksi HOLD'
-                        : !allChecked
-                        ? 'Lengkapi 4/4 verifikasi checklist'
-                        : 'Catat review HOLD; belum ada instruksi eksternal'
-                    }
-                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all "
-                  >
-                    <span>Pratinjau HOLD</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAction('OVERRIDE', 'CONTINUE')}
-                    disabled={!canOverride}
-                    aria-label={role === 'REGULATOR' ? 'OVERRIDE [Khusus Dispatcher]' : 'OVERRIDE'}
-                    title={
-                      role === 'REGULATOR'
-                        ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
-                        : !hasEvidence
-                        ? 'Belum terverifikasi — approval dinonaktifkan'
-                        : !notes.trim()
-                        ? 'Wajib mengisi catatan operator untuk aksi OVERRIDE'
-                        : !allChecked
-                        ? 'Lengkapi 4/4 verifikasi checklist'
-                        : 'Lanjut rute asal dengan justifikasi operator'
-                    }
-                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <span>Pratinjau Jalur Asal</span>
-                  </button>
-                </div>
+                {/* Single CTA row — shown ONLY when trip intersects hazard */}
+                {checkingTripHazard ? (
+                  <p className="text-xs text-slate-400 font-mono py-2">
+                    Memeriksa perpotongan rute trip dengan bahaya konsensus...
+                  </p>
+                ) : (role === 'DISPATCHER' && selectedTrip && !tripIntersectsHazard) ? (
+                  <div className="p-3 rounded-[10px] bg-white/[0.04] border border-white/10 text-xs text-slate-300 space-y-1">
+                    <span className="font-semibold text-slate-200 block">Rute Bebas Bahaya</span>
+                    <p className="text-slate-400 leading-relaxed font-sans">
+                      Trip {selectedTrip.id} ({selectedTrip.truck_id}) tidak melintasi area bahaya konsensus. Tindakan pengalihan atau penahanan tidak diperlukan.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAction('APPROVE', 'REROUTE')}
+                      disabled={!canApprove}
+                      aria-label={role === 'REGULATOR' ? 'SETUJUI [Khusus Dispatcher]' : 'SETUJUI'}
+                      title={
+                        role === 'REGULATOR'
+                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                          : !hasEvidence || isSimulatedRoute
+                          ? 'Bukti atau rute grounded belum memenuhi syarat'
+                          : !selectedTrip
+                          ? 'Pilih trip eligible terlebih dahulu'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Setujui pengalihan rute armada'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all "
+                    >
+                      <span>Pratinjau Pengalihan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAction('HOLD', 'HOLD')}
+                      disabled={!canHold}
+                      aria-label="TAHAN"
+                      title={
+                        !notes.trim()
+                          ? 'Wajib mengisi catatan operator untuk aksi HOLD'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Catat review HOLD; belum ada instruksi eksternal'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all "
+                    >
+                      <span>Pratinjau HOLD</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAction('OVERRIDE', 'CONTINUE')}
+                      disabled={!canOverride}
+                      aria-label={role === 'REGULATOR' ? 'OVERRIDE [Khusus Dispatcher]' : 'OVERRIDE'}
+                      title={
+                        role === 'REGULATOR'
+                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                          : !hasEvidence
+                          ? 'Belum terverifikasi — approval dinonaktifkan'
+                          : !notes.trim()
+                          ? 'Wajib mengisi catatan operator untuk aksi OVERRIDE'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Lanjut rute asal dengan justifikasi operator'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <span>Pratinjau Jalur Asal</span>
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={onClose}

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
+import { useHazardConsensus } from '@/hooks/useHazardConsensus';
 import { useCrisisSocket } from '@/hooks/useCrisisSocket';
 import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
 import { notifyToast } from '@/components/ui/Toast';
@@ -38,7 +39,7 @@ import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
-import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
 import { isDocumentVisible } from '@/lib/visibility';
 import { DS } from '@/lib/designTokens';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
@@ -756,6 +757,7 @@ export default function DashboardClient() {
     initialData: seededIncidents,
     observedAt: seededIncidentsSection?.observed_at,
   });
+  const { records: consensusHazards } = useHazardConsensus({ enabled: true });
   const {
     vehicles: activeFleetVehicles,
     refetch: refetchFleet,
@@ -1159,22 +1161,32 @@ export default function DashboardClient() {
     });
   }, [newsFeed, selectedNewsCategory, newsSearchQuery, newsProvinceFilter, newsTierFilter]);
 
-  // Province chips: every province the payload reports, in canonical order, plus
-  // any bucket the visible feed actually carries.
-  const newsProvinceChips = useMemo(() => {
-    const present = new Set<string>();
-    for (const province of newsBreadthMeta?.provinces_present || []) {
-      present.add(normalizeProvince(province));
-    }
+  // Provinces present in news, ordered by latest article time then alphabetical.
+  const newsProvincesWithData = useMemo(() => {
+    const provinceLatestTime = new Map<string, number>();
     for (const item of newsFeed) {
-      if (item.link || item.url) present.add(normalizeProvince(item.province));
+      if (item.link || item.url) {
+        const prov = normalizeProvince(item.province);
+        const timeStr = item.published_at || item.pubDate;
+        const t = timeStr ? new Date(timeStr).getTime() : 0;
+        provinceLatestTime.set(prov, Math.max(provinceLatestTime.get(prov) ?? 0, t));
+      }
     }
-    const order = (p: string) => {
-      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
-      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
-    };
-    return Array.from(present).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
+    for (const province of newsBreadthMeta?.provinces_present || []) {
+      const prov = normalizeProvince(province);
+      if (!provinceLatestTime.has(prov)) provinceLatestTime.set(prov, 0);
+    }
+    return Array.from(provinceLatestTime.keys()).sort((a, b) => {
+      const timeA = provinceLatestTime.get(a) ?? 0;
+      const timeB = provinceLatestTime.get(b) ?? 0;
+      if (timeB !== timeA) return timeB - timeA;
+      if (a === AREA_WIDE_PROVINCE) return 1;
+      if (b === AREA_WIDE_PROVINCE) return -1;
+      return a.localeCompare(b);
+    });
   }, [newsFeed, newsBreadthMeta]);
+
+  const newsProvinceChips = newsProvincesWithData;
 
   // Provinces the backend reported as empty in the 48h window (honest emptiness).
   const newsProvincesMissing = useMemo(
@@ -1211,11 +1223,8 @@ export default function DashboardClient() {
     return parts.join(' · ');
   }, [activeNewsFilterCount, newsTierFilter, selectedNewsCategory, newsProvinceFilter, filteredNews.length]);
 
-  // Group the visible feed by province. Group order follows the chip order so the
-  // list and the filter row tell the same story; order is deterministic, so an
-  // identical cached re-poll cannot re-shuffle the DOM (freeze contract).
-  // Inside a province the backend's crisis-first order is preserved: a stable
-  // sort ranks crisis before regional, so a context card never precedes a hazard.
+  // Group the visible feed by province, sorted by latest article time then severity.
+  // Area-wide items appear after province-specific news.
   const groupedNews = useMemo(() => {
     const groups = new Map<string, typeof filteredNews>();
     for (const item of filteredNews) {
@@ -1224,14 +1233,41 @@ export default function DashboardClient() {
       if (bucket) bucket.push(item);
       else groups.set(key, [item]);
     }
-    const order = (p: string) => {
-      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
-      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
+    const getGroupTime = (items: typeof filteredNews) => {
+      let maxTime = 0;
+      for (const item of items) {
+        const timeStr = item.published_at || item.pubDate;
+        if (timeStr) {
+          const t = new Date(timeStr).getTime();
+          if (t > maxTime) maxTime = t;
+        }
+      }
+      return maxTime;
+    };
+    const getGroupSeverity = (items: typeof filteredNews) => {
+      let maxSev = 0;
+      for (const item of items) {
+        if (item.zone_tier === 'RED_CONFIRMED' || item.severity === 'critical') maxSev = Math.max(maxSev, 3);
+        else if (item.zone_tier === 'YELLOW_CLARIFY' || item.severity === 'high') maxSev = Math.max(maxSev, 2);
+        else if (item.relevance_tier !== 'regional') maxSev = Math.max(maxSev, 1);
+      }
+      return maxSev;
     };
     const tierRank = (item: { relevance_tier?: NewsRelevanceTier }) =>
       item.relevance_tier === 'regional' ? 1 : 0;
+
     return Array.from(groups.entries())
-      .sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]))
+      .sort((a, b) => {
+        const timeA = getGroupTime(a[1]);
+        const timeB = getGroupTime(b[1]);
+        if (timeB !== timeA) return timeB - timeA;
+        const sevA = getGroupSeverity(a[1]);
+        const sevB = getGroupSeverity(b[1]);
+        if (sevB !== sevA) return sevB - sevA;
+        if (a[0] === AREA_WIDE_PROVINCE) return 1;
+        if (b[0] === AREA_WIDE_PROVINCE) return -1;
+        return a[0].localeCompare(b[0]);
+      })
       .map(([province, items]) => ({
         province,
         items: [...items].sort((a, b) => tierRank(a) - tierRank(b)),
@@ -1591,8 +1627,49 @@ export default function DashboardClient() {
       if (z.zone_tier === 'YELLOW_CLARIFY' && !showYellowZones) return false;
       return true;
     });
+
+    const consensusZones: DisasterZone[] = [];
+    for (const h of consensusHazards) {
+      const ring = toLonLatRing(h.geometry);
+      if (!ring || ring.length < 3) continue;
+      const tier = h.tier;
+      const isRed = tier === 'CONFIRMED';
+      const isAdvisory = tier === 'ADVISORY' || h.geometry_role === 'advisory_area';
+      if (isRed && !showRedZones) continue;
+      if (!isRed && !showYellowZones) continue;
+
+      const lat = h.center?.lat ?? ring[0][1];
+      const lon = h.center?.lon ?? ring[0][0];
+      const sev = String(h.severity || 'medium').toLowerCase();
+      const risk = sev === 'critical' ? 0.95 : sev === 'high' ? 0.8 : sev === 'medium' ? 0.55 : 0.35;
+
+      consensusZones.push({
+        id: h.id,
+        crisis_id: h.id,
+        type: (h.type as CrisisType) || 'other_disruption',
+        risk,
+        tier: h.tier,
+        geometry_role: h.geometry_role,
+        sources: h.sources,
+        confidence: h.confidence,
+        reason: h.reason,
+        zone_tier: isRed ? 'RED_CONFIRMED' : 'YELLOW_CLARIFY',
+        title: h.title,
+        tier_reason: h.reason,
+        custom_hazard_label: isAdvisory ? `Peringatan: ${h.title}` : h.title,
+        polygon: ring,
+        geometry_polygon: ring,
+        center: [lon, lat],
+        radiusKm: h.radius_km ?? (isAdvisory ? 0 : 5),
+        radius_km: h.radius_km ?? (isAdvisory ? 0 : 5),
+      });
+    }
+
+    if (consensusZones.length > 0) {
+      return [...consensusZones, ...filteredDisasterZones];
+    }
     return [...crisisHazardZones, ...filteredDisasterZones, ...consolidatedLive];
-  }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
+  }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry, consensusHazards]);
 
   // Synchronize activeSection from URL query parameters.
   // GUEST hard-block: ?section=reports|analytics|evaluation never opens the
@@ -3438,6 +3515,9 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
         { name: `Mitigasi Koridor (${corridorSegment})`, relation: 'dialihkan via', impact_score: 0.8 },
       ],
       zone_tier: zoneTier,
+      tier: fallbackZone?.tier || (zoneTier === 'RED_CONFIRMED' ? 'CONFIRMED' : 'WATCH'),
+      sources: fallbackZone?.sources || (newsItem?.source_name ? [newsItem.source_name] : ['BMKG CAP']),
+      geometry_role: fallbackZone?.geometry_role || 'buffer_footprint',
       forecast_tag: forecastActive ? FORECAST_TAG : undefined,
       forecast_valid_until: forecastValidUntil ?? null,
       tier_reason: tierReason,
@@ -4209,14 +4289,7 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                   const isRegional = item.relevance_tier === 'regional';
 
                   const handleFocusMap = () => {
-                    // Forecast path: info-only. No origin/dest reroute pairing and
-                    // no detour calculation — inspectNewsOrZoneAuditTrail emits
-                    // zero routes instead of a reroute CTA.
-                    if (!isForecast && item.originNode && item.destNode) {
-                      setSelectedOriginNode(item.originNode);
-                      setSelectedDestNode(item.destNode);
-                      updateUrlParams({ origin: item.originNode, dest: item.destNode });
-                    }
+                    // Berita is information only: focus map & inspect audit trail in sidebar
                     void inspectNewsOrZoneAuditTrail(item, undefined);
                   };
 
@@ -4315,8 +4388,9 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                       )}
 
                       {item.affected_locations && item.affected_locations.length > 1 && (
- <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-sans leading-snug">
-                          📍 {item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}
+                        <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-sans leading-snug flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)] shrink-0" />
+                          <span>{item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}</span>
                         </div>
                       )}
 
@@ -4331,11 +4405,10 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                       )}
 
                       {/* God's-Eye Monospaced Tactical Telemetry Grid */}
- <div className="p-2 rounded-lg bg-transparent border-t border-white/5 font-mono text-xs space-y-1.5 leading-snug">
- {/* Row 1 — Lokasi. The only value allowed to clip: a raw address may be
-     two lines, never one ellipsised line, and the full text stays in `title`. */}
+                      <div className="p-2 rounded-lg bg-transparent border-t border-white/5 font-mono text-xs space-y-1.5 leading-snug">
+                        {/* Row 1 — Lokasi */}
                         <div className="flex items-start justify-between gap-2 text-[#e8eaed]">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Lokasi:</span>
+                          <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Lokasi:</span>
                           <span
                             data-testid={`berita-lokasi-${item.id}`}
                             className="min-w-0 flex-1 text-right line-clamp-2 break-words"
@@ -4355,13 +4428,9 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                           </span>
                         </div>
 
- {/* Row 2 — Keyakinan (Phase 172 / M9): tier + honest label; a percentage only
-     when a calibrated consensus value exists. The static 0.86/0.94 tier
-     constant is never rendered as confidence. Phase 176.8: the tier badge is
-     one line and the honest label is a second line — "Belum terverifikasi" is
-     the most important string on the card and must never be ellipsised. */}
+                        {/* Row 2 — Keyakinan */}
                         <div className="flex items-start justify-between gap-2 text-[#e8eaed] border-t border-white/10 pt-1">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Keyakinan:</span>
+                          <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Keyakinan:</span>
                           <span
                             data-testid={`berita-confidence-${item.id}`}
                             className="flex min-w-0 flex-col items-end gap-0.5 text-right"
@@ -4374,17 +4443,16 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                               {displayTierLabel(item.display_confidence?.tier || item.source_tier)}
                             </span>
                             <span className="text-xs font-semibold leading-snug break-words">
-                              {item.display_confidence?.label || 'Belum terverifikasi'}
+                              {item.zone_tier === 'YELLOW_CLARIFY' || item.display_confidence?.basis === 'unverified' || !item.display_confidence?.value
+                                ? 'Verifikasi dengan tim lapangan'
+                                : (item.display_confidence?.label || 'Terkonfirmasi')}
                             </span>
                           </span>
                         </div>
 
-
- {/* Row 3 — Jalur. Status + commodity wrap as whole units instead of being
-     cut by `truncate`; the bullet travels with the commodity so a wrapped
-     line never starts with an orphan separator. */}
+                        {/* Row 3 — Jalur */}
                         <div className="flex items-start justify-between gap-2 text-[#e8eaed] border-t border-white/10 pt-1">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Jalur:</span>
+                          <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Jalur:</span>
                           <div
                             data-testid={`berita-route-${item.id}`}
                             className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-right"
@@ -4392,6 +4460,11 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                             <span className={isForecast ? 'text-[#f59e0b] font-semibold shrink-0 whitespace-nowrap' : itemZoneTier === 'RED_CONFIRMED' ? 'text-[#ef4444] font-semibold shrink-0 whitespace-nowrap' : 'text-[#f59e0b] font-semibold shrink-0 whitespace-nowrap'}>
                               {isForecast ? 'Prakiraan Waspada Dini' : itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
                             </span>
+                            {item.corridor_segment && (
+                              <span className="text-[rgba(232,234,237,0.62)] truncate max-w-[120px]" title={item.corridor_segment}>
+                                · {item.corridor_segment}
+                              </span>
+                            )}
                             <span className="text-[#e8eaed] break-words" title={item.commodity_name || 'Komoditas Pangan'}>
                               <span className="text-[rgba(232,234,237,0.38)]">• </span>
                               {item.commodity_name || 'Pangan'}
@@ -4452,20 +4525,6 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                           >
                             <span>Fokus</span>
                           </button>
-                          {activeRouteIdx != null && currentMapRoutes.length > 0 && currentMapRoutes.some((r) => r.corridor_type !== 'hold_staging') && currentMapRoutes[activeRouteIdx]?.corridor_type !== 'hold_staging' && !isForecast && (
-                          <button
-                            type="button"
-                            data-testid={`berita-hold-${item.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFocusMap();
-                            }}
-                            title={isForecast ? 'Terapkan opsi TAHAN armada (prakiraan waspada dini — tanpa pengalihan rute)' : 'Tahan armada terkait zona ini'}
-                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-colors border border-white/10 text-[rgba(232,234,237,0.62)] hover:border-white/25 hover:text-[#e8eaed]"
-                          >
-                            <span>Tahan (Hold)</span>
-                          </button>
-                          )}
                         </div>
                       </div>
                     </div>

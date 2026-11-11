@@ -247,3 +247,161 @@ export function ringToGeoJsonPolygon(ring: LonLatRing | null | undefined): GeoJs
   if (!ring || ring.length < 4) return null;
   return { type: 'Polygon', coordinates: [closeRing(ring)] };
 }
+
+/**
+ * 2D Ray casting point-in-polygon test.
+ */
+export function pointInPolygonRing(point: LonLat, ring: LonLatRing): boolean {
+  if (!ring || ring.length < 3) return false;
+  const [x, y] = point;
+  let inside = false;
+  let j = ring.length - 1;
+  for (let i = 0; i < ring.length; i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y)) {
+      const crossX = ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-15) + xi;
+      if (x < crossX) {
+        inside = !inside;
+      }
+    }
+    j = i;
+  }
+  return inside;
+}
+
+function orientation(a: LonLat, b: LonLat, c: LonLat): number {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function onSegment(p: LonLat, q: LonLat, r: LonLat): boolean {
+  return (
+    Math.min(p[0], r[0]) <= q[0] &&
+    q[0] <= Math.max(p[0], r[0]) &&
+    Math.min(p[1], r[1]) <= q[1] &&
+    q[1] <= Math.max(p[1], r[1])
+  );
+}
+
+/**
+ * Checks if segment a-b intersects segment c-d.
+ */
+export function segmentsIntersect(a: LonLat, b: LonLat, c: LonLat, d: LonLat): boolean {
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+
+  if ((o1 < 0) !== (o2 < 0) && (o3 < 0) !== (o4 < 0)) {
+    return true;
+  }
+
+  return (
+    (o1 === 0 && onSegment(a, c, b)) ||
+    (o2 === 0 && onSegment(a, d, b)) ||
+    (o3 === 0 && onSegment(c, a, d)) ||
+    (o4 === 0 && onSegment(c, b, d))
+  );
+}
+
+/**
+ * Checks if a route polyline intersects a polygon ring.
+ */
+export function routeIntersectsPolygonRing(route: LonLat[], ring: LonLatRing): boolean {
+  if (!route || route.length < 1 || !ring || ring.length < 3) return false;
+
+  // 1. Check if any route vertex is inside the polygon ring
+  for (const pt of route) {
+    if (pointInPolygonRing(pt, ring)) return true;
+  }
+
+  // 2. Check if any route edge intersects any polygon edge
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = route[i];
+    const b = route[i + 1];
+    for (let j = 0; j < ring.length - 1; j++) {
+      if (segmentsIntersect(a, b, ring[j], ring[j + 1])) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Finds all segment indices and coordinates on the route that intersect a polygon ring.
+ */
+export function findRouteIntersectingSegments(
+  route: LonLat[],
+  ring: LonLatRing
+): Array<{ segment_index: number; start: LonLat; end: LonLat }> {
+  if (!route || route.length < 2 || !ring || ring.length < 3) return [];
+
+  const results: Array<{ segment_index: number; start: LonLat; end: LonLat }> = [];
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = route[i];
+    const b = route[i + 1];
+
+    let intersects = pointInPolygonRing(a, ring) || pointInPolygonRing(b, ring);
+    if (!intersects) {
+      for (let j = 0; j < ring.length - 1; j++) {
+        if (segmentsIntersect(a, b, ring[j], ring[j + 1])) {
+          intersects = true;
+          break;
+        }
+      }
+    }
+
+    if (intersects) {
+      results.push({
+        segment_index: i,
+        start: a,
+        end: b,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Normalizes any GeoJSON Polygon or MultiPolygon or rings into a list of LonLatRing.
+ */
+export function extractPolygonRings(geometry: any): LonLatRing[] {
+  if (!geometry) return [];
+  if (Array.isArray(geometry) && geometry.length >= 3) {
+    const ring = toLonLatRing(geometry);
+    return ring ? [ring] : [];
+  }
+  if (geometry.type === 'Polygon' && Array.isArray(geometry.coordinates)) {
+    return geometry.coordinates
+      .map((r: any) => toLonLatRing(r))
+      .filter((r: LonLatRing | null): r is LonLatRing => r !== null);
+  }
+  if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+    const rings: LonLatRing[] = [];
+    for (const poly of geometry.coordinates) {
+      if (Array.isArray(poly)) {
+        for (const r of poly) {
+          const ring = toLonLatRing(r);
+          if (ring) rings.push(ring);
+        }
+      }
+    }
+    return rings;
+  }
+  const fallback = toLonLatRing(geometry);
+  return fallback ? [fallback] : [];
+}
+
+/**
+ * Evaluates whether a route polyline intersects any ring in a GeoJSON geometry.
+ */
+export function routeIntersectsGeometry(route: LonLat[], geometry: any): boolean {
+  const rings = extractPolygonRings(geometry);
+  if (!rings.length || !route || route.length < 1) return false;
+  return rings.some((ring) => routeIntersectsPolygonRing(route, ring));
+}
+

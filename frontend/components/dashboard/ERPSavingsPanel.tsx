@@ -99,33 +99,36 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
   // compat — the visible 'Selesaikan Trip' flow now chains
   // updateTravel -> solveTravelHedging inside LaporanAktualModal.
   // Do not delete this export/handler.
-  const handleSolveHedging = async (travelId: string) => {
-    if (!isDispatcher) {
-      notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
-      return;
-    }
-    // Guard sinkron: abaikan klik kedua saat POST hedging masih berjalan.
-    if (solvingGuardRef.current === travelId) return;
-    solvingGuardRef.current = travelId;
-    setSolvingTripId(travelId);
-    setActionError(null);
-    try {
-      await api.fleet.solveTravelHedging(travelId, {});
-      await loadSummary();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? `Gagal menghitung hedging Trip ${travelId} (${err.message}).`
-          : `Gagal menghitung hedging Trip ${travelId}.`;
-      setActionError(message);
-      if (err instanceof Error && /403/.test(err.message)) {
+  const handleSolveHedging = useCallback(
+    async (travelId: string) => {
+      if (!isDispatcher) {
         notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
+        return;
       }
-    } finally {
-      solvingGuardRef.current = null;
-      setSolvingTripId(null);
-    }
-  };
+      // Guard sinkron: abaikan klik kedua saat POST hedging masih berjalan.
+      if (solvingGuardRef.current === travelId) return;
+      solvingGuardRef.current = travelId;
+      setSolvingTripId(travelId);
+      setActionError(null);
+      try {
+        await api.fleet.solveTravelHedging(travelId, {});
+        await loadSummary();
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? `Gagal menghitung hedging Trip ${travelId} (${err.message}).`
+            : `Gagal menghitung hedging Trip ${travelId}.`;
+        setActionError(message);
+        if (err instanceof Error && /403/.test(err.message)) {
+          notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
+        }
+      } finally {
+        solvingGuardRef.current = null;
+        setSolvingTripId(null);
+      }
+    },
+    [isDispatcher, loadSummary],
+  );
 
   // M8 Phase 5: single 'Selesaikan Trip' entry — Dispatcher-only.
   const handleOpenAktual = useCallback(

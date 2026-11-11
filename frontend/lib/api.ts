@@ -262,6 +262,29 @@ export const api = {
       );
     },
   },
+  hazards: {
+    consensus: (signal?: AbortSignal, refresh: boolean = false) => {
+      const qs = refresh ? '?refresh=true' : '';
+      return request<import('./types').HazardConsensusResponse>(
+        `/api/v1/hazards/consensus${qs}`,
+        { signal }
+      );
+    },
+    checkRoute: (
+      routeGeometry: [number, number][] | { type: string; coordinates: [number, number][] },
+      signal?: AbortSignal
+    ) => {
+      const coords = Array.isArray(routeGeometry)
+        ? routeGeometry
+        : routeGeometry?.coordinates;
+      return request<import('./types').RouteCheckResponse>('/api/v1/hazards/check-route', {
+        method: 'POST',
+        body: JSON.stringify({ route_geometry: coords }),
+        signal,
+      });
+    },
+  },
+
   incidents: {
     list: (params?: { status?: string; severity?: string; limit?: number }, signal?: AbortSignal) => {
       const qs = params

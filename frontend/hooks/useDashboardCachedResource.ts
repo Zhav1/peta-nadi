@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dashboardMemoryCache } from '@/lib/dashboardMemoryCache';
 import { subscribeVisibility } from '@/lib/visibility';
 
@@ -122,14 +122,20 @@ export function useDashboardCachedResource<T>(
   const matchesKey = state.key === key;
   const data = matchesKey ? state.data : cached?.value ?? null;
   const updatedAt = matchesKey ? state.updatedAt : cached?.updatedAt ?? null;
+  const isLoading = matchesKey ? state.isLoading : enabled && !cached;
+  const isRefreshing = matchesKey ? state.isRefreshing : enabled;
+  const error = matchesKey ? state.error : null;
 
-  return {
-    key,
-    data,
-    updatedAt,
-    isLoading: matchesKey ? state.isLoading : enabled && !cached,
-    isRefreshing: matchesKey ? state.isRefreshing : enabled,
-    error: matchesKey ? state.error : null,
-    refresh,
-  };
+  return useMemo(
+    () => ({
+      key,
+      data,
+      updatedAt,
+      isLoading,
+      isRefreshing,
+      error,
+      refresh,
+    }),
+    [key, data, updatedAt, isLoading, isRefreshing, error, refresh],
+  );
 }
