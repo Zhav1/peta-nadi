@@ -1578,14 +1578,9 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': [
-            'case',
-            ['any', ['==', ['get', 'safety_status'], 'PRECAUTIONARY_RISK'], ['==', ['get', 'safety_status'], 'HOLD_DELAY']],
-            '#f59e0b',
-            ['coalesce', ['get', 'color'], '#38bdf8']
-          ],
-          'line-width': 4,
-          'line-opacity': 0.85,
+          'line-color': '#64748b',
+          'line-width': 3.5,
+          'line-opacity': 0.55,
           'line-dasharray': [2, 2],
         },
       });

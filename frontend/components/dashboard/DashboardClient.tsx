@@ -2178,6 +2178,29 @@ export default function DashboardClient() {
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
   const resolveNodeInfo = useCallback((nodeId: string | null): ({ coords: [number, number] } & NodeDisplayInfo) | null => {
     if (!nodeId) return null;
+    const id = nodeId;
+    const settlementMatch = id.match(/^(settlement|pin)-(-?\d+\.?\d*)-(-?\d+\.?\d*)$/);
+    if (settlementMatch) {
+      const lon = parseFloat(settlementMatch[2]);
+      const lat = parseFloat(settlementMatch[3]);
+      if (!isNaN(lon) && !isNaN(lat)) {
+        const labelName = settlementMatch[1] === 'pin'
+          ? `Pin Lokasi (${lat.toFixed(3)}, ${lon.toFixed(3)})`
+          : `Titik Peta (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+        if (!customNodesRef.current[id]) {
+          customNodesRef.current[id] = { coords: [lon, lat], name: labelName };
+        }
+        return {
+          id,
+          name: labelName,
+          display_name: labelName,
+          coords: [lon, lat] as [number, number],
+          type: 'settlement',
+          region: 'Sumatera',
+          province: 'Sumatera',
+        };
+      }
+    }
     if (HUB_NODES[nodeId]) {
       return {
         coords: HUB_NODES[nodeId].coords,
