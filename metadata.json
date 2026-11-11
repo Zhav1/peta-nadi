@@ -3,7 +3,7 @@
   "checkpoint_id": "01M758ZV2RFKMKK8BDNS8Y2Z7S",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 5,
   "files_touched": [
     "backend/tests/test_adapters.py"
   ],
@@ -13,14 +13,20 @@
       "transcript": "/0/full.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 264497,
+    "input_tokens": 490143,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 6832790,
-    "output_tokens": 21729,
-    "api_call_count": 103
+    "cache_read_tokens": 6967086,
+    "output_tokens": 23695,
+    "api_call_count": 106
   },
   "redaction": {
     "replacements": 4,
