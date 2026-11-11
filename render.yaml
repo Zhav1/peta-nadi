@@ -1,3 +1,16 @@
+# ============================================================================
+# LEGACY — Render is no longer the production deployment target (2026-11).
+#
+# Production backend now runs on a Hostinger VPS (deploy dir /opt/prehub,
+# behind Caddy at https://api.177-202-246-251.nip.io) — deployed by
+# .github/workflows/deploy.yml. The frontend stays on Vercel.
+#
+# This file describes the OLD Render Free deployment and is kept ONLY because
+# the Render service `peta-nadi` still exists as a read-only standby. It must
+# NOT own the ingestion tick: do NOT set INTERNAL_TICK_TOKEN in the Render
+# dashboard. When that variable is unset, POST /internal/tick 404s, which is
+# the intended standby state. Do not add new services or env vars here.
+# ============================================================================
 services:
   - type: web
     name: peta-nadi

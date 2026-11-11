@@ -1,3 +1,5 @@
+# LEGACY (2026-11): Koyeb is an unused, retired deployment target — production
+# runs on the Hostinger VPS (.github/workflows/deploy.yml). Kept only for history.
 # Koyeb Service Deployment Spec for PreHub Sumatra Worker (Phase 179 / D1)
 # Production headless worker: executes batch ingestion and versioned snapshot generation
 # on Koyeb free tier in Frankfurt (fra), eliminating 50s cold starts on external ticks.
