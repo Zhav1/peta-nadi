@@ -9,13 +9,17 @@ rationale) and `docs/TEST_DEBT.md` (test gate).
 | Item | Value |
 |---|---|
 | Host | `177.202.246.251` |
-| SSH user | `akin` |
+| SSH user | `akin` (in the `docker` group — no sudo for compose) |
 | Deploy dir | `/opt/prehub` |
 | Repo (public) | `https://github.com/Zhav1/peta-nadi.git` |
-| Backend image | `ghcr.io/zhav1/peta-nadi/backend` |
+| Backend image | `ghcr.io/zhav1/peta-nadi/backend` (public GHCR — anonymous pull) |
 | Compose file | `docker-compose.yml` **only** |
+| Backend port | published on `127.0.0.1:8000` only |
+| Public URL | `https://api.177-202-246-251.nip.io` (Caddy + Let's Encrypt) |
 | Health | `GET /health`, `GET /api/v1/health` |
-| Tick status | `GET /internal/tick/status` |
+| Tick status | `GET /internal/tick/status` (public, tokenless) |
+| Tick token | lives in `/opt/prehub/.env` as `INTERNAL_TICK_TOKEN` — never print or log it |
+| Scheduler config | `tick_max_jobs=6`, `tick_budget_seconds=200`, tick period 300 s; tick lease TTL 240 s (the budget stays under the lease) |
 
 **Hard constraints — violating these breaks production silently:**
 
@@ -28,7 +32,10 @@ rationale) and `docs/TEST_DEBT.md` (test gate).
 3. **Never start the `frontend` service.** Next.js runs on Vercel.
 4. **Never run migrations from CI.** They are applied manually.
 5. **Only one scheduler may own the tick.** The `scheduler` sidecar owns it.
-   Do not re-enable cron-job.org against this host.
+   Do not re-enable cron-job.org or the Render `peta-nadi` tick against this
+   Supabase project, and do not run the backend locally with batch pollers
+   against it — every extra tick source competes for the same Supabase lease
+   and burns provider budget (`docs/KEEPALIVE_RUNBOOK.md`).
 
 ## 1. One-time install
 
@@ -86,20 +93,22 @@ Copy every secret from the dev `.env`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 chmod 600 /opt/prehub/.env
 ```
 
-## 3. First bring-up (build locally, not via CI)
+## 3. First bring-up (once, before CI can take over)
 
 The pipeline uses `--no-deps`, so it will not start Redis or Caddy on an empty
-box. Do the first start by hand:
+box. Do the first start by hand — pull the public image (fall back to
+`--build` only if a matching image tag does not exist yet):
 
 ```bash
 cd /opt/prehub
-docker compose -f docker-compose.yml up -d --build caddy redis backend scheduler
+docker compose -f docker-compose.yml pull backend scheduler
+docker compose -f docker-compose.yml up -d caddy redis backend scheduler
 docker compose -f docker-compose.yml ps
 docker compose -f docker-compose.yml logs -f backend | head -40
 ```
 
-The backend build takes 5–10 min on 2 vCPU. `caddy` waits for the backend
-healthcheck, so `caddy` starting last is normal.
+(A local build takes 5–10 min on 2 vCPU if you use `--build` instead.)
+`caddy` waits for the backend healthcheck, so `caddy` starting last is normal.
 
 ## 4. Verify
 
@@ -110,22 +119,29 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/health
 # 2. Public health through Caddy (first call may take ~30s for the cert)
 curl -sS -o /dev/null -w "%{http_code} %{time_total}s\n" https://api.177-202-246-251.nip.io/health
 
-# 3. Scheduler is ticking (needs the token from .env)
-TOKEN=$(grep '^INTERNAL_TICK_TOKEN=' .env | cut -d= -f2)
-curl -sS -D - -o /tmp/tick.json -X POST \
-  -H "X-Internal-Token: $TOKEN" https://api.177-202-246-251.nip.io/internal/tick
-cat /tmp/tick.json     # expect 202 {"accepted": true, "due": [...]}
+# 3. Tick status (public, tokenless read)
+curl -sS https://api.177-202-246-251.nip.io/internal/tick/status | jq
 
-# 4. Tick history
-curl -sS https://api.177-202-246-251.nip.io/internal/tick/status | head -c 800
-
-# 5. Scheduler sidecar is alive and getting 202s
+# 4. Scheduler sidecar is alive and getting 202s
 docker compose -f docker-compose.yml logs --tail 20 scheduler
 ```
 
 Expected: `/health` 200 in under 1 s warm; the sidecar logs
 `POST /internal/tick -> 202` every 300 s; `/internal/tick/status` shows
 `last_finished_at` advancing.
+
+**A manual tick is rarely needed** — the sidecar runs it every 300 s. If you
+must fire one by hand, read the token into a shell variable without echoing
+it and never log, `cat`, or inline it in a URL:
+
+```bash
+set -a; source /opt/prehub/.env; set +a
+curl -sS -o /tmp/tick.json -w "%{http_code}\n" -X POST \
+  -H "X-Internal-Token: $INTERNAL_TICK_TOKEN" \
+  https://api.177-202-246-251.nip.io/internal/tick
+rm -f /tmp/tick.json
+# never: echo "$INTERNAL_TICK_TOKEN", cat .env, or shell history with the token
+```
 
 Snapshot freshness (from any machine with psql or the Supabase SQL editor):
 
@@ -137,22 +153,27 @@ from public.public_dashboard_snapshots where snapshot_key = 'sumatra_mainland';
 `age` must stay under 600 s. If it grows, the tick is not running — check
 `docker compose logs scheduler` and `select job_name, last_status, last_error,
 retry_after from public.scheduler_jobs order by last_finished_at nulls first;`
+(plus the `ingest_runs` audit table — see `docs/KEEPALIVE_RUNBOOK.md`).
 
 ## 5. Updating
 
 **Normal path (CI):** push to `main` → GitHub Actions builds
-`ghcr.io/zhav1/peta-nadi/backend:<sha>` → SSH → `docker compose pull` →
-`up -d --no-deps backend scheduler` → 90 s health gate → auto-rollback to the
-previous SHA on failure. Nothing to do on the box.
+`ghcr.io/zhav1/peta-nadi/backend:<sha>` → SSH → `git fetch` + `git checkout
+main` + `git pull --ff-only origin main` (CI now syncs the checkout itself,
+so compose/Caddyfile/docs changes reach the box too) → `docker compose pull`
+→ `up -d --no-deps backend scheduler` → 90 s health gate → auto-rollback to
+the previous SHA on failure. Nothing to do on the box.
 
 **Manual path (CI down):**
 
 ```bash
 cd /opt/prehub
 git pull --ff-only
-docker compose -f docker-compose.yml build backend
+docker compose -f docker-compose.yml pull backend scheduler   # GHCR is public
 docker compose -f docker-compose.yml up -d --no-deps backend scheduler
 ```
+
+(Migrations are still manual in both paths — CI never applies them.)
 
 **Rollback:**
 
@@ -174,7 +195,24 @@ docker compose -f docker-compose.yml up -d --no-deps backend scheduler
 | `docker compose` complains about override | you ran without `-f` | always `-f docker-compose.yml` |
 | Port 8000 reachable from the internet | ufw not enabled | `sudo ufw --force enable` |
 
-## 7. Logs and housekeeping
+## 7. Known honest states (not failures)
+
+Some section statuses you will see in the public snapshot are **truthful
+observations, not incidents**. Do not open a ticket for them; check the
+`observed_at` timestamp before treating a status as a failure.
+
+| Section status | What it means | Action |
+|---|---|---|
+| `traffic_flow_segments` = `degraded` | The TomTom fetch refreshed but some checkpoints failed — e.g. 19/20 checkpoint coverage (`partial_flow_coverage:19/20`). Phase 181 exists precisely so this fresh-but-degraded evidence is stored instead of silently dropped. | None, unless coverage stays at 19/20 for hours — then check `scheduler_jobs.last_error` for the TomTom job. |
+| `news` = `stale` | No qualifying new rows exist in the window; the data is old because there is nothing new to fetch. | None, unless `news` has not reached `ok` for many hours. |
+| `incidents` = `stale` | Same as `news` — no qualifying new incident rows. | None, unless persistent for many hours. |
+
+The real failure signature is a section stuck `stale`/`degraded` with an
+`observed_at` that stops advancing while `scheduler` keeps logging `202` —
+that means ingestion runs but the source is failing; look at
+`scheduler_jobs.last_error` and `ingest_runs`.
+
+## 8. Logs and housekeeping
 
 ```bash
 docker compose -f docker-compose.yml logs --tail 100 backend
