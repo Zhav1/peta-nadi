@@ -601,3 +601,9 @@ async def run_tick(
 
 def new_run_id() -> str:
     return uuid.uuid4().hex
+
+
+async def run_hazard_consensus_tick() -> dict:
+    """Invokes the hazards consensus cycle from the scheduled tick path."""
+    from app.services.hazard_consensus_service import run_hazard_consensus_cycle
+    return await run_hazard_consensus_cycle()

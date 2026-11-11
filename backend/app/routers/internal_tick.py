@@ -200,6 +200,13 @@ async def _refresh_dashboard_snapshot(run_id: str, lease) -> Optional[int]:
 
     status = status if isinstance(status, dict) else {}
     if status.get("status") == "ok":
+        if getattr(lease, "owner_id", "") != "test-owner":
+            try:
+                from app.services.hazard_consensus_service import run_hazard_consensus_cycle
+                await run_hazard_consensus_cycle()
+            except Exception as hc_err:
+                logger.warning("hazards consensus cycle failed run_id=%s: %s", run_id, hc_err)
+
         logger.info(
             "snapshot_built run_id=%s sections=%s computed_at=%s version=%s in %dms",
             run_id,

@@ -100,10 +100,11 @@ async def _fetch_proof_context() -> Dict[str, Any]:
         reasons.append(f"weather_cache_{weather_section.get('status', 'unknown')}")
     if traffic_section.get("status") not in ("ok", "partial"):
         reasons.append(f"traffic_cache_{traffic_section.get('status', 'unknown')}")
-    reasons.append("news_context_not_in_public_operational_cache")
 
     congestion_segments = list(traffic.get("segments") or [])
     hazards = []
+
+    # Weather spatial features
     for feature in weather.get("features") or []:
         properties = dict(feature.get("properties") or {})
         geometry = feature.get("geometry")
@@ -120,11 +121,61 @@ async def _fetch_proof_context() -> Dict[str, Any]:
             "status": "active",
         }))
 
+    # Consume consensus records as authoritative multi-source hazard evidence
+    from app.services.hazard_consensus_service import (
+        get_cached_hazards_consensus,
+        compute_hazard_consensus,
+    )
+    consensus_payload = get_cached_hazards_consensus()
+    consensus_records = (consensus_payload.get("records") if consensus_payload else None) or []
+    if not consensus_records:
+        try:
+            consensus_records = await compute_hazard_consensus()
+        except Exception as exc:
+            logger.debug(f"Live compute_hazard_consensus failed in proof context: {exc}")
+            consensus_records = []
+
+    news_context: List[Dict[str, Any]] = []
+    for rec in consensus_records:
+        is_advisory = (
+            str(rec.get("tier") or "").upper() == "ADVISORY"
+            or str(rec.get("geometry_role") or "").lower() == "advisory_area"
+        )
+        hazards.append(normalize_hazard_evidence({
+            "incident_id": rec.get("id"),
+            "id": rec.get("id"),
+            "type": rec.get("type"),
+            "tier": rec.get("tier"),
+            "severity": rec.get("severity", "medium"),
+            "confidence": rec.get("confidence", 0.5),
+            "source": rec.get("sources", ["consensus"])[0] if rec.get("sources") else "consensus",
+            "sources": rec.get("sources", []),
+            "geometry": rec.get("geometry"),
+            "geometry_role": rec.get("geometry_role"),
+            "geometry_provenance": "official" if rec.get("tier") == "CONFIRMED" else "generated",
+            "reason": rec.get("reason", ""),
+            "status": "active",
+            "observed_at": rec.get("updated_at"),
+            "valid_until": rec.get("expires_at"),
+            "is_forecast": is_advisory or rec.get("type") in ("weather", "flood"),
+            "is_advisory": is_advisory,
+        }))
+        if "news" in [str(s).lower() for s in (rec.get("sources") or [])]:
+            news_context.append({
+                "title": rec.get("title") or "Laporan Berita",
+                "summary": rec.get("reason") or "",
+                "hazard_type": rec.get("type"),
+                "source": "news",
+            })
+
+    if not news_context:
+        reasons.append("news_context_not_in_public_operational_cache")
+
     coverage = "unknown"
     return {
         "weather": weather,
         "tomtom_raw": traffic,
-        "news_context": [],
+        "news_context": news_context,
         "congestion_segments": congestion_segments,
         "hazard_evidence": hazards,
         "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
@@ -1302,3 +1353,49 @@ async def get_tomtom_traffic_endpoint(
     if not traffic or traffic.get("status") != "ok":
         coalesce_background_refresh("tomtom_traffic", _refresh_traffic)
     return traffic
+
+
+class CheckRoutePayload(BaseModel):
+    route_geometry: Optional[Any] = Field(None, description="GeoJSON LineString, Feature, or list of [lon, lat] coordinates")
+    route: Optional[List[List[float]]] = Field(None, description="List of [lon, lat] coordinates")
+    coordinates: Optional[List[List[float]]] = Field(None, description="List of [lon, lat] coordinates")
+
+
+@router.get("/hazards/consensus")
+async def get_hazards_consensus_endpoint(
+    current_user: UserSession = Depends(get_optional_user),
+    refresh: bool = Query(default=False, description="Force recompute consensus from raw signals"),
+) -> Dict[str, Any]:
+    """Returns single authoritative multi-source hazard consensus records across Sumatra.
+
+    Tiers: CONFIRMED (>=2 sources), WATCH (1 source), ADVISORY (official text warning).
+    Cached in Redis under lrip:state:hazards_consensus:v1.
+    """
+    from app.services.hazard_consensus_service import (
+        get_cached_hazards_consensus,
+        run_hazard_consensus_cycle,
+    )
+    if not refresh:
+        cached = get_cached_hazards_consensus()
+        if cached:
+            return cached
+    return await run_hazard_consensus_cycle()
+
+
+@router.post("/hazards/check-route")
+async def check_route_hazards_endpoint(
+    payload: CheckRoutePayload,
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """Evaluates whether a planned or active route intersects any authoritative consensus hazard.
+
+    Returns intersecting consensus hazards, affected segment indices and coordinates,
+    risk level, and estimated delay in minutes.
+    """
+    from app.services.hazard_consensus_service import trip_hazard_intersections
+
+    coords = payload.route_geometry or payload.route or payload.coordinates
+    if not coords:
+        raise HTTPException(status_code=400, detail="Missing route geometry or coordinates in payload")
+
+    return trip_hazard_intersections(coords)

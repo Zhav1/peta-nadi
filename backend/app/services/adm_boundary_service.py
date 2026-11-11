@@ -5,12 +5,58 @@ enriched with live BMKG weather, TomTom traffic, and active hazard state.
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
 _FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "north_sumatra_adm_boundaries.json"
+_SUMATRA_SCOPE_PATH = Path(__file__).parent.parent / "fixtures" / "sumatra_scope.geojson"
+
+_PROVINCE_ALIASES: Dict[str, str] = {
+    "aceh": "Aceh",
+    "daerah istimewa aceh": "Aceh",
+    "sumatera utara": "Sumatera Utara",
+    "sumut": "Sumatera Utara",
+    "north sumatra": "Sumatera Utara",
+    "sumatera barat": "Sumatera Barat",
+    "sumbar": "Sumatera Barat",
+    "west sumatra": "Sumatera Barat",
+    "riau": "Riau",
+    "jambi": "Jambi",
+    "sumatera selatan": "Sumatera Selatan",
+    "sumsel": "Sumatera Selatan",
+    "south sumatra": "Sumatera Selatan",
+    "bengkulu": "Bengkulu",
+    "lampung": "Lampung",
+    "kepulauan riau": "Kepulauan Riau",
+    "kepri": "Kepulauan Riau",
+    "bangka belitung": "Bangka-Belitung",
+    "kepulauan bangka belitung": "Bangka-Belitung",
+    "babel": "Bangka-Belitung",
+}
+
+_REGENCY_ALIASES: Dict[str, str] = {
+    "medan": "Kota Medan",
+    "kota medan": "Kota Medan",
+    "belawan": "Kecamatan Medan Belawan",
+    "medan belawan": "Kecamatan Medan Belawan",
+    "deli serdang": "Kabupaten Deli Serdang",
+    "kabupaten deli serdang": "Kabupaten Deli Serdang",
+    "binjai": "Kota Binjai & Langkat Barat",
+    "kota binjai": "Kota Binjai & Langkat Barat",
+    "langkat": "Kota Binjai & Langkat Barat",
+    "kabupaten langkat": "Kota Binjai & Langkat Barat",
+    "karo": "Kabupaten Karo (Berastagi)",
+    "kabupaten karo": "Kabupaten Karo (Berastagi)",
+    "berastagi": "Kabupaten Karo (Berastagi)",
+    "tebing tinggi": "Kota Tebing Tinggi & Sergai",
+    "kota tebing tinggi": "Kota Tebing Tinggi & Sergai",
+    "serdang bedagai": "Kota Tebing Tinggi & Sergai",
+    "kabupaten serdang bedagai": "Kota Tebing Tinggi & Sergai",
+    "sergai": "Kota Tebing Tinggi & Sergai",
+}
 
 def get_adm_boundaries() -> Dict[str, Any]:
     """Returns GeoJSON FeatureCollection of North Sumatra ADM2/ADM3 boundaries."""
@@ -22,6 +68,67 @@ def get_adm_boundaries() -> Dict[str, Any]:
         logger.error(f"Failed to read ADM boundary fixture: {e}")
 
     return {"type": "FeatureCollection", "features": []}
+
+def get_province_boundaries() -> Dict[str, Any]:
+    """Returns GeoJSON FeatureCollection of Sumatra provinces."""
+    try:
+        if _SUMATRA_SCOPE_PATH.exists():
+            with open(_SUMATRA_SCOPE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to read Sumatra scope fixture: {e}")
+
+    return {"type": "FeatureCollection", "features": []}
+
+def get_advisory_boundary_for_area(area_name: str) -> Optional[Dict[str, Any]]:
+    """Resolves real administrative boundary GeoJSON geometry for a given province or regency name.
+
+    Returns the real GeoJSON geometry (MultiPolygon or Polygon) from official fixtures.
+    If boundary data for the specified region is missing from fixtures, returns None
+    (strictly reporting the gap rather than inventing synthetic shapes).
+    """
+    if not area_name:
+        return None
+
+    clean = re.sub(r"\s+", " ", str(area_name).strip().lower())
+    if not clean:
+        return None
+
+    # 1. Check Regency / City matches
+    reg_target = None
+    for alias, canonical in sorted(_REGENCY_ALIASES.items(), key=lambda x: -len(x[0])):
+        if re.search(rf"\b{re.escape(alias)}\b", clean):
+            reg_target = canonical.lower()
+            break
+
+    adm_data = get_adm_boundaries()
+    for feat in adm_data.get("features", []):
+        props = feat.get("properties", {})
+        fname = str(props.get("name", "")).lower()
+        fid = str(feat.get("id", "")).lower()
+        if (reg_target and (reg_target in fname or fname in reg_target)) or (clean in fname or fname in clean):
+            geom = feat.get("geometry")
+            if geom and isinstance(geom, dict) and geom.get("type") in ("Polygon", "MultiPolygon"):
+                return geom
+
+    # 2. Check Province matches
+    prov_target = None
+    for alias, canonical in sorted(_PROVINCE_ALIASES.items(), key=lambda x: -len(x[0])):
+        if re.search(rf"\b{re.escape(alias)}\b", clean):
+            prov_target = canonical.lower()
+            break
+
+    prov_data = get_province_boundaries()
+    for feat in prov_data.get("features", []):
+        props = feat.get("properties", {})
+        pname = str(props.get("name", "")).lower()
+        if (prov_target and (prov_target == pname or prov_target in pname)) or (clean == pname or clean in pname or pname in clean):
+            geom = feat.get("geometry")
+            if geom and isinstance(geom, dict) and geom.get("type") in ("Polygon", "MultiPolygon"):
+                return geom
+
+    # Missing boundary data gap reported (never invent shapes)
+    return None
 
 def get_boundary_by_id(region_id: str) -> Optional[Dict[str, Any]]:
     """Returns a specific ADM boundary feature by region_id."""

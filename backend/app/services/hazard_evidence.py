@@ -238,10 +238,18 @@ def normalize_hazard_evidence(
         and observed_geometry
     )
     official_closure = hazard_type in {"road_closure", "port_closure"} and _is_official(sources, row, evidence_items)
+    is_advisory = (
+        str(row.get("tier") or "").upper() == "ADVISORY"
+        or str(row.get("geometry_role") or "").lower() == "advisory_area"
+        or _truthy(row.get("is_advisory"))
+    )
 
     if not current:
         classification = _UNKNOWN
         reason = "stale_or_missing_current_source_evidence"
+    elif is_advisory:
+        classification = _PRECAUTIONARY
+        reason = "advisory_warning_area"
     elif is_forecast:
         classification = _PRECAUTIONARY
         reason = "forecast_or_modeled_risk"
@@ -268,6 +276,9 @@ def normalize_hazard_evidence(
         "classification": classification,
         "reason": reason,
         "hazard_type": hazard_type,
+        "tier": row.get("tier"),
+        "is_advisory": is_advisory,
+        "geometry_role": row.get("geometry_role"),
         "source_names": sources,
         "observed_at": observed_at.isoformat() if observed_at else None,
         "valid_until": valid_until.isoformat() if valid_until else None,

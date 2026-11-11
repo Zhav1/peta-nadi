@@ -1,5 +1,6 @@
 import httpx
 import logging
+import re
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 import json
@@ -128,24 +129,58 @@ class BMKGAdapter(BaseAdapter):
                     lat, lon = float(lat_str), float(lon_str)
                     coords_match = (self.MIN_LAT <= lat <= self.MAX_LAT) and (self.MIN_LON <= lon <= self.MAX_LON)
                 
-                if magnitude >= 5.0 and (is_sumatra or coords_match):
+                # Extract depth for shallow event check (shallow <= 60 km)
+                depth_km = None
+                kedalaman_str = str(eq.get("Kedalaman", "") or "")
+                depth_match = re.search(r"(\d+(?:\.\d+)?)", kedalaman_str)
+                if depth_match:
+                    try:
+                        depth_km = float(depth_match.group(1))
+                    except (ValueError, TypeError):
+                        depth_km = None
+                is_shallow = (depth_km is None) or (depth_km <= 60.0)
+
+                if magnitude >= 4.0 and (is_sumatra or coords_match) and is_shallow:
                     # Check deduplication
                     tanggal = eq.get("Tanggal", "")
                     jam = eq.get("Jam", "")
                     dedup_key = f"bmkg:eq:{tanggal}:{jam}:{magnitude}"
                     
                     r = get_redis()
-                    if not r.get(f"lrip:dedup:{dedup_key}"):
-                        # Mark as seen in Redis
-                        r.set(f"lrip:dedup:{dedup_key}", "1", ex=86400) # 24h TTL
+                    is_seen = False
+                    if r is not None:
+                        try:
+                            is_seen = bool(r.get(f"lrip:dedup:{dedup_key}"))
+                        except Exception:
+                            is_seen = False
+
+                    if not is_seen:
+                        if r is not None:
+                            try:
+                                r.set(f"lrip:dedup:{dedup_key}", "1", ex=86400) # 24h TTL
+                            except Exception:
+                                pass
                         
                         # Determine severity
-                        if magnitude < 6.0:
+                        if magnitude < 5.0:
+                            severity = "low"
+                        elif magnitude < 6.0:
                             severity = "medium"
                         elif magnitude < 7.0:
                             severity = "high"
                         else:
                             severity = "critical"
+
+                        # Single source of truth for quake radius between map and routing
+                        if magnitude < 5.0:
+                            radius_km = 1.5
+                        elif magnitude < 6.0:
+                            radius_km = 3.0
+                        else:
+                            radius_km = 5.0
+
+                        from app.services.spatial_fusion_engine import make_point_buffer_polygon
+                        quake_geom = make_point_buffer_polygon(lat, lon, radius_m=radius_km * 1000.0)
                             
                         events.append({
                             "source": self.source_name,
@@ -153,6 +188,11 @@ class BMKGAdapter(BaseAdapter):
                             "severity": severity,
                             "lat": str(lat),
                             "lon": str(lon),
+                            "magnitude": magnitude,
+                            "depth_km": depth_km,
+                            "radius_km": radius_km,
+                            "geometry": quake_geom,
+                            "geometry_role": "source_footprint",
                             "title": f"M{magnitude} Earthquake - {wilayah}",
                             "raw": json.dumps(eq),
                             "ts": datetime.now(timezone.utc).isoformat(),

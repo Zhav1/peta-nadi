@@ -893,6 +893,9 @@ class CPURoutingAdapter:
                         intersects = False
                 if not intersects:
                     continue
+                if evidence.get("tier") == "ADVISORY" or evidence.get("geometry_role") == "advisory_area" or evidence.get("is_advisory"):
+                    penalty_multiplier = max(penalty_multiplier, 1.1)
+                    continue
                 if evidence.get("classification") == "CONFIRMED_BLOCKAGE":
                     hard_block = True
                     break
@@ -1196,6 +1199,78 @@ class CPURoutingAdapter:
             except Exception as proof_err:
                 logger.debug(f"Proof enrichment skipped: {proof_err}")
 
+        # Check if the best route (routes[0]) still intersects a hazard with no detour
+        hazard_intersection_summary = None
+        if routes:
+            r0 = routes[0]
+            r0_coords = r0.get("coordinates") or []
+            r0_assessment = r0.get("hazard_assessment") or {}
+            
+            # Does r0 intersect a hazard?
+            r0_intersects = (
+                r0_assessment.get("status") in ("BLOCKED", "PRECAUTIONARY_RISK")
+                or bool(r0.get("is_compromised"))
+                or any(route_intersects_geometry(r0_coords, hz.get("geometry")) for hz in normalized_hazards if hz.get("geometry"))
+            )
+            
+            # Does an alternative route exist that is viable and CLEAR of hazards?
+            has_clear_detour = any(
+                r.get("hazard_assessment", {}).get("status") == "CLEAR"
+                for r in routes[1:]
+            )
+            
+            if r0_intersects and not has_clear_detour:
+                affected_segments = []
+                affected_indices = []
+                intersected_hazards = []
+                
+                for hz in normalized_hazards:
+                    h_geom = hz.get("geometry")
+                    if not h_geom:
+                        continue
+                    if route_intersects_geometry(r0_coords, h_geom):
+                        intersected_hazards.append(hz)
+                        for s_idx in range(len(r0_coords) - 1):
+                            seg = [r0_coords[s_idx], r0_coords[s_idx + 1]]
+                            if route_intersects_geometry(seg, h_geom):
+                                if s_idx not in affected_indices:
+                                    affected_indices.append(s_idx)
+                                    affected_segments.append({
+                                        "segment_index": s_idx,
+                                        "start": r0_coords[s_idx],
+                                        "end": r0_coords[s_idx + 1],
+                                        "hazard_type": hz.get("hazard_type"),
+                                        "tier": hz.get("tier"),
+                                    })
+                
+                has_blocked = any(hz.get("classification") == "CONFIRMED_BLOCKAGE" for hz in intersected_hazards)
+                has_confirmed = any(hz.get("tier") == "CONFIRMED" for hz in intersected_hazards)
+                
+                if has_blocked or has_confirmed:
+                    risk_level = "high"
+                    extra_delay_mins = 45
+                elif any(hz.get("tier") == "WATCH" for hz in intersected_hazards):
+                    risk_level = "medium"
+                    extra_delay_mins = 25
+                else:
+                    risk_level = "low"
+                    extra_delay_mins = 10
+                    
+                note = "Rute terbaik melintasi area bahaya aktif tanpa opsi jalur memutar (detour). Disarankan penyesuaian jadwal atau penundaan."
+                if intersected_hazards and intersected_hazards[0].get("reason"):
+                    note = f"Melintasi area bahaya: {intersected_hazards[0]['reason']} Tidak tersedia rute alternatif yang bebas risiko."
+
+                hazard_intersection_summary = {
+                    "has_intersection": True,
+                    "has_detour": False,
+                    "affected_segment_indices": sorted(affected_indices),
+                    "affected_segments": affected_segments,
+                    "note": note,
+                    "risk_level": risk_level,
+                    "estimated_delay_minutes": extra_delay_mins,
+                }
+                r0["hazard_intersection"] = hazard_intersection_summary
+
         no_reason = (
             f"Tidak ada jalur pada graph arteri antara {snapped_orig_node} dan {snapped_dest_node}. "
             "Gunakan mode antarmoda atau titik terdekat koridor."
@@ -1217,6 +1292,7 @@ class CPURoutingAdapter:
             "routes": routes,
             "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
             "hazard_evidence": normalized_hazards,
+            "hazard_intersection": hazard_intersection_summary,
             "hard_excluded_edge_count": len(hard_blocked_edges),
             "decision_status": "SAFE_ROUTE_AVAILABLE" if any(r.get("viable") for r in routes) else "HOLD_DELAY",
             "safety_review_required": not any(r.get("viable") for r in routes),
