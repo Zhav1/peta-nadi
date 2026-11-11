@@ -58,6 +58,16 @@ const TIER_LABEL: Record<string, string> = {
   Lainnya: 'Lainnya',
 };
 
+const EMPTY_TRIPS: ERPTripRow[] = [];
+const DEFAULT_EMPTY_TIER_GROUPS: CommodityTierGroup[] = [
+  { tier: 'ultra', tripCount: 0, totalSavedIdr: 0, totalSavedFuelLiters: 0, totalSavedHours: 0 },
+  { tier: 'cold', tripCount: 0, totalSavedIdr: 0, totalSavedFuelLiters: 0, totalSavedHours: 0 },
+  { tier: 'semi', tripCount: 0, totalSavedIdr: 0, totalSavedFuelLiters: 0, totalSavedHours: 0 },
+  { tier: 'dry', tripCount: 0, totalSavedIdr: 0, totalSavedFuelLiters: 0, totalSavedHours: 0 },
+  { tier: 'Lainnya', tripCount: 0, totalSavedIdr: 0, totalSavedFuelLiters: 0, totalSavedHours: 0 },
+];
+const EMPTY_PERIOD_BUCKETS: PeriodBucket[] = [];
+
 function formatIDR(value?: number | null): string {
   const n = Number(value ?? 0);
   return `Rp ${Math.round(n).toLocaleString('id-ID')}`;
@@ -143,20 +153,22 @@ export default function LaporanHybridPanel({
   const totals = summary?.totals;
   const isAggregateOnly = summary?.scope === 'REGULATOR_AGGREGATE';
 
+  const rawTrips = summary?.trips ?? EMPTY_TRIPS;
+
   const filteredTrips = useMemo<ERPTripRow[]>(
-    () => applyLaporanFilters(summary?.trips ?? [], filters),
-    [summary?.trips, filters]
+    () => (rawTrips.length === 0 ? EMPTY_TRIPS : applyLaporanFilters(rawTrips, filters)),
+    [rawTrips, filters]
   );
 
-  const tierGroups = useMemo<CommodityTierGroup[]>(
-    () => groupByCommodityTier(filteredTrips),
-    [filteredTrips]
-  );
+  const tierGroups = useMemo<CommodityTierGroup[]>(() => {
+    if (filteredTrips.length === 0) return DEFAULT_EMPTY_TIER_GROUPS;
+    return groupByCommodityTier(filteredTrips);
+  }, [filteredTrips]);
 
-  const periodBuckets = useMemo<PeriodBucket[]>(
-    () => groupByPeriod(filteredTrips, granularity),
-    [filteredTrips, granularity]
-  );
+  const periodBuckets = useMemo<PeriodBucket[]>(() => {
+    if (filteredTrips.length === 0) return EMPTY_PERIOD_BUCKETS;
+    return groupByPeriod(filteredTrips, granularity);
+  }, [filteredTrips, granularity]);
 
   const fleetEconomy = useMemo(() => averageTripEconomy(filteredTrips), [filteredTrips]);
 

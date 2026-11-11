@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Area,
   Bar,
@@ -65,7 +65,16 @@ const LINE_CURSOR = { stroke: 'rgba(255,255,255,0.15)' } as const;
 const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0];
 const LINE_DOT = { r: 2.5, fill: '#10b981' } as const;
 const ACTIVE_DOT = { r: 4 } as const;
-const TOOLTIP_CONTENT = <ChartTooltip />;
+const GRID_STROKE = 'rgba(255,255,255,0.08)' as const;
+const GRID_DASHARRAY = '3 3' as const;
+
+// Separate identity-stable tooltip elements per chart to prevent cross-store
+// collision in recharts v3's internal Redux slices.
+const TIER_TOOLTIP_CONTENT = <ChartTooltip />;
+const PERIOD_TOOLTIP_CONTENT = <ChartTooltip />;
+
+const EMPTY_TIER_DATA: Array<{ tier: string; Hemat: number; tripCount: number }> = [];
+const EMPTY_PERIOD_DATA: Array<{ periode: string; Hemat: number; tripCount: number }> = [];
 
 function yAxisTickFormatter(v: number): string {
   return formatJtM(v);
@@ -86,28 +95,85 @@ interface LaporanChartsProps {
 }
 
 export default function LaporanCharts({ tierGroups, periodBuckets, granularityLabel }: LaporanChartsProps) {
-  const tierData = useMemo(
-    () =>
-      (tierGroups ?? []).map((g) => ({
-        tier: TIER_LABEL[g.tier] ?? g.tier,
-        Hemat: Math.round(g.totalSavedIdr),
-        tripCount: g.tripCount,
-      })),
-    [tierGroups]
-  );
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const periodData = useMemo(
-    () =>
-      (periodBuckets ?? []).map((b) => ({
-        periode: b.label,
-        Hemat: Math.round(b.totalSavedIdr),
-        tripCount: b.tripCount,
-      })),
-    [periodBuckets]
-  );
+  const tierDataRef = useRef(EMPTY_TIER_DATA);
+  const tierData = useMemo(() => {
+    if (!tierGroups || tierGroups.length === 0) {
+      tierDataRef.current = EMPTY_TIER_DATA;
+      return EMPTY_TIER_DATA;
+    }
+    const next = tierGroups.map((g) => ({
+      tier: TIER_LABEL[g.tier] ?? g.tier,
+      Hemat: Math.round(g.totalSavedIdr),
+      tripCount: g.tripCount,
+    }));
+    const prev = tierDataRef.current;
+    if (
+      prev.length === next.length &&
+      prev.every((p, i) => p.tier === next[i].tier && p.Hemat === next[i].Hemat && p.tripCount === next[i].tripCount)
+    ) {
+      return prev;
+    }
+    tierDataRef.current = next;
+    return next;
+  }, [tierGroups]);
+
+  const periodDataRef = useRef(EMPTY_PERIOD_DATA);
+  const periodData = useMemo(() => {
+    if (!periodBuckets || periodBuckets.length === 0) {
+      periodDataRef.current = EMPTY_PERIOD_DATA;
+      return EMPTY_PERIOD_DATA;
+    }
+    const next = periodBuckets.map((b) => ({
+      periode: b.label,
+      Hemat: Math.round(b.totalSavedIdr),
+      tripCount: b.tripCount,
+    }));
+    const prev = periodDataRef.current;
+    if (
+      prev.length === next.length &&
+      prev.every((p, i) => p.periode === next[i].periode && p.Hemat === next[i].Hemat && p.tripCount === next[i].tripCount)
+    ) {
+      return prev;
+    }
+    periodDataRef.current = next;
+    return next;
+  }, [periodBuckets]);
 
   const hasTier = tierData.some((d) => d.Hemat !== 0 || d.tripCount > 0);
   const hasPeriod = periodData.length > 0 && periodData.some((d) => d.Hemat !== 0 || d.tripCount > 0);
+
+  if (!mounted) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/10">
+            <div className="h-4 w-36 rounded bg-white/5 motion-safe:animate-pulse" />
+            <div className="mt-1 h-3 w-48 rounded bg-white/5 motion-safe:animate-pulse" />
+          </div>
+          <div className="h-64 p-4">
+            <div className="h-full rounded-lg bg-white/5 motion-safe:animate-pulse" aria-hidden="true" />
+          </div>
+        </div>
+        <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <div className="h-4 w-36 rounded bg-white/5 motion-safe:animate-pulse" />
+              <div className="mt-1 h-3 w-48 rounded bg-white/5 motion-safe:animate-pulse" />
+            </div>
+            <div className="h-3 w-16 rounded bg-white/5 motion-safe:animate-pulse" />
+          </div>
+          <div className="h-64 p-4">
+            <div className="h-full rounded-lg bg-white/5 motion-safe:animate-pulse" aria-hidden="true" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -121,7 +187,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
           {!hasTier && <EmptyOverlay message="Belum ada data tier pada filter ini." />}
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={tierData} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <CartesianGrid strokeDasharray={GRID_DASHARRAY} stroke={GRID_STROKE} vertical={false} />
               <XAxis dataKey="tier" tick={X_TICK} axisLine={X_AXIS_LINE} tickLine={false} />
               <YAxis
                 tickFormatter={yAxisTickFormatter}
@@ -130,8 +196,8 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                 tickLine={false}
                 width={56}
               />
-              <Tooltip content={TOOLTIP_CONTENT} cursor={BAR_CURSOR} />
-              <Bar dataKey="Hemat" fill="#10b981" radius={BAR_RADIUS} maxBarSize={44} />
+              <Tooltip content={TIER_TOOLTIP_CONTENT} cursor={BAR_CURSOR} isAnimationActive={false} />
+              <Bar dataKey="Hemat" fill="#10b981" radius={BAR_RADIUS} maxBarSize={44} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -156,7 +222,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                   <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <CartesianGrid strokeDasharray={GRID_DASHARRAY} stroke={GRID_STROKE} vertical={false} />
               <XAxis dataKey="periode" tick={X_TICK} axisLine={X_AXIS_LINE} tickLine={false} />
               <YAxis
                 tickFormatter={yAxisTickFormatter}
@@ -165,8 +231,15 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                 tickLine={false}
                 width={56}
               />
-              <Tooltip content={TOOLTIP_CONTENT} cursor={LINE_CURSOR} />
-              <Area type="monotone" dataKey="Hemat" name="Hemat" fill="url(#laporanHematFill)" stroke="transparent" />
+              <Tooltip content={PERIOD_TOOLTIP_CONTENT} cursor={LINE_CURSOR} isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="Hemat"
+                name="Hemat"
+                fill="url(#laporanHematFill)"
+                stroke="transparent"
+                isAnimationActive={false}
+              />
               <Line
                 type="monotone"
                 dataKey="Hemat"
@@ -175,6 +248,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                 strokeWidth={2}
                 dot={LINE_DOT}
                 activeDot={ACTIVE_DOT}
+                isAnimationActive={false}
               />
             </ComposedChart>
           </ResponsiveContainer>
