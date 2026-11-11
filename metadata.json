@@ -3,7 +3,7 @@
   "checkpoint_id": "01M7571T72KD26QYHTA6XR1T1R",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "frontend/components/dashboard/ERPSavingsPanel.tsx",
     "frontend/hooks/useDashboardCachedResource.ts",
@@ -14,6 +14,12 @@
       "metadata": "/0/metadata.json",
       "transcript": "/0/full.jsonl",
       "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "content_hash": "/1/content_hash.txt",
       "prompt": ""
     }
   ],
