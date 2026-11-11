@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.13.2",
+  "checkpoint_id": "01M757167NJQCYZXM14WT4QJJQ",
+  "session_id": "f08accbd-185f-4881-b193-dadba80a076b",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-11T11:49:02.4448692Z",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [
+    "backend/app/adapters/bmkg_adapter.py",
+    "backend/app/adapters/cpu_routing_adapter.py",
+    "backend/app/routers/internal_tick.py",
+    "backend/app/routers/routing_router.py",
+    "backend/app/services/adm_boundary_service.py",
+    "backend/app/services/hazard_evidence.py",
+    "backend/app/services/job_scheduler.py"
+  ],
+  "agent": "Antigravity",
+  "model": "claude-sonnet-5-5-medium",
+  "turn_id": "401c3afb15ac",
+  "session_token_usage": {
+    "input_tokens": 513788,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1337264,
+    "output_tokens": 19057,
+    "api_call_count": 23
+  },
+  "redaction": {
+    "replacements": 0,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 0,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 4
+  }
+}

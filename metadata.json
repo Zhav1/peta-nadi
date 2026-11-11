@@ -3,7 +3,7 @@
   "checkpoint_id": "01M757167NJQCYZXM14WT4QJJQ",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 6,
   "files_touched": [
     "backend/app/adapters/bmkg_adapter.py",
     "backend/app/adapters/cpu_routing_adapter.py",
@@ -28,6 +28,12 @@
       "transcript": "/1/full.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "redaction": {
