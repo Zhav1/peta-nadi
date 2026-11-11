@@ -552,6 +552,7 @@ export function RouteDetailModal({
             {holdVsRerouteEconomics ? (
               <HoldVsRerouteCard
                 economics={holdVsRerouteEconomics}
+                route={route}
                 onApplyTactical={(action) => setPreviewPolicy(action)}
                 selectedAction={previewPolicy === 'CONTINUE' ? 'CONTINUE' : previewPolicy}
               />

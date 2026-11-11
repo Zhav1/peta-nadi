@@ -416,6 +416,41 @@ function FloatingMapLegend({
               </div>
             </div>
 
+            {/* ── Simpul Logistik (TomTom 20 Chokepoints) ────────────────────── */}
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+              <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
+                Simpul Logistik (TomTom 20 Chokepoints)
+              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#10b981] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Arus Bebas / Lancar (&gt;70% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Laju kendaraan normal mendekati batas kecepatan bebas.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#f59e0b] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Padat / Tersendat (40-70% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Perlambatan signifikan akibat antrean tol/pelabuhan.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#ef4444] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Macet Berat (&lt;40% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Kemacetan parah atau perlambatan kritis di simpul logistik.</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-[rgba(232,234,237,0.45)] font-sans leading-tight pt-0.5">
+                Dipantau pada 20 simpul tol &amp; pelabuhan logistik Trans-Sumatera
+              </p>
+            </div>
+
             <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
               <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
                 Armada
@@ -2220,6 +2255,29 @@ export default function DashboardClient() {
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
   const resolveNodeInfo = useCallback((nodeId: string | null): ({ coords: [number, number] } & NodeDisplayInfo) | null => {
     if (!nodeId) return null;
+    const id = nodeId;
+    const settlementMatch = id.match(/^(settlement|pin)-(-?\d+\.?\d*)-(-?\d+\.?\d*)$/);
+    if (settlementMatch) {
+      const lon = parseFloat(settlementMatch[2]);
+      const lat = parseFloat(settlementMatch[3]);
+      if (!isNaN(lon) && !isNaN(lat)) {
+        const labelName = settlementMatch[1] === 'pin'
+          ? `Pin Lokasi (${lat.toFixed(3)}, ${lon.toFixed(3)})`
+          : `Titik Peta (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+        if (!customNodesRef.current[id]) {
+          customNodesRef.current[id] = { coords: [lon, lat], name: labelName };
+        }
+        return {
+          id,
+          name: labelName,
+          display_name: labelName,
+          coords: [lon, lat] as [number, number],
+          type: 'settlement',
+          region: 'Sumatera',
+          province: 'Sumatera',
+        };
+      }
+    }
     if (HUB_NODES[nodeId]) {
       return {
         coords: HUB_NODES[nodeId].coords,
@@ -3257,7 +3315,8 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
   { keywords: ['bandar lampung', 'lampung'], coords: [105.2667, -5.4292], zoom: 11.5 },
   { keywords: ['bakauheni'], coords: [105.7520, -5.8680], zoom: 12 },
   { keywords: ['batam'], coords: [104.0305, 1.0456], zoom: 11.5 },
-  { keywords: ['medan', 'sumatera utara', 'sumut'], coords: [98.6722, 3.5952], zoom: 11.5 },
+  { keywords: ['medan'], coords: [98.6722, 3.5952], zoom: 11.5 },
+  { keywords: ['sumatera utara', 'sumut'], coords: [99.0722, 2.7052], zoom: 7.8 },
   { keywords: ['aceh'], coords: [96.7494, 4.6951], zoom: 9 },
   { keywords: ['sumatera barat', 'sumbar'], coords: [100.3543, -0.9471], zoom: 9 },
   { keywords: ['riau'], coords: [101.4478, 0.5071], zoom: 9 },

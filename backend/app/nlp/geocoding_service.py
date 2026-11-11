@@ -200,7 +200,7 @@ BARE_PROVINCE_KEYS = {
 # cleaned body text (province_only). Never used as a blind fallback.
 PROVINCE_CENTROIDS: Dict[str, tuple] = {
     "Aceh": (5.5483, 95.3238),
-    "Sumatera Utara": (3.5952, 98.6722),
+    "Sumatera Utara": (2.7000, 99.0700),
     "Sumatera Barat": (-0.9471, 100.4172),
     "Riau": (0.5071, 101.4478),
     "Kepulauan Riau": (1.1301, 104.0529),

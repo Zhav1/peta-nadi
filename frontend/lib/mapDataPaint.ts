@@ -66,19 +66,23 @@ export const FLEET_DOTS_PAINT: Record<string, unknown> = {
     ['all', ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], ['==', ['get', 'modality'], 'maritime']], MODALITY_COLOR.maritime,
     ['all', ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], ['==', ['get', 'modality'], 'air']], MODALITY_COLOR.air,
     ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], MODALITY_COLOR.air,
+    // Maritime vessels in dark ocean get white keyline for sharp contrast on dark-v11
+    ['==', ['get', 'modality'], 'maritime'], 'rgba(255, 255, 255, 0.45)',
     // Normal solid dots get the neutral dark keyline, never a self-coloured stroke.
     MAP_KEYLINE,
   ],
   'circle-opacity': [
     'interpolate', ['linear'], ['zoom'],
-    3.2, 0.0,
+    2.2, 0.0,
+    3.0, 0.85,
     4.0, 1.0,
   ],
   // Zoom may ONLY sit at the top level of an interpolate. The estimated-unit
   // dimming is a data-driven output of the 4.0 stop, never a nested zoom ramp.
   'circle-stroke-opacity': [
     'interpolate', ['linear'], ['zoom'],
-    3.2, 0.0,
+    2.2, 0.0,
+    3.0, 0.85,
     4.0, [
       'case',
       ['all',

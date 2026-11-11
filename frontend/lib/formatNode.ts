@@ -15,6 +15,8 @@ export interface NodeDisplayInfo {
   kabupaten?: string | null;
   province?: string | null;
   type?: string | null;
+  id?: string | null;
+  region?: string | null;
 }
 
 export type ResolvedNodeInfo = NodeDisplayInfo & { coords?: [number, number] };
@@ -32,8 +34,16 @@ function slugify(value: string): string {
 export function prettyNodeSlug(nodeId: string): string {
   if (!nodeId) return '';
 
-  const pinMatch = nodeId.match(/^pin-(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/i);
-  if (pinMatch) return `Titik ${pinMatch[1]}, ${pinMatch[2]}`;
+  const settlementMatch = nodeId.match(/^(settlement|pin)-(-?\d+\.?\d*)-(-?\d+\.?\d*)$/i);
+  if (settlementMatch) {
+    const lon = parseFloat(settlementMatch[2]);
+    const lat = parseFloat(settlementMatch[3]);
+    if (!isNaN(lon) && !isNaN(lat)) {
+      return settlementMatch[1].toLowerCase() === 'pin'
+        ? `Pin Lokasi (${lat.toFixed(3)}, ${lon.toFixed(3)})`
+        : `Titik Peta (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+    }
+  }
 
   let slug = normalizeRegencyId(nodeId)
     .replace(/^node-/i, '')
@@ -92,6 +102,26 @@ export function resolveNodeDisplayInfo(
   customNodes?: CustomNodeMap | null
 ): ResolvedNodeInfo | null {
   if (!nodeId) return null;
+
+  const settlementMatch = nodeId.match(/^(settlement|pin)-(-?\d+\.?\d*)-(-?\d+\.?\d*)$/i);
+  if (settlementMatch) {
+    const lon = parseFloat(settlementMatch[2]);
+    const lat = parseFloat(settlementMatch[3]);
+    if (!isNaN(lon) && !isNaN(lat)) {
+      const label = settlementMatch[1].toLowerCase() === 'pin'
+        ? `Pin Lokasi (${lat.toFixed(3)}, ${lon.toFixed(3)})`
+        : `Titik Peta (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+      return {
+        id: nodeId,
+        name: label,
+        display_name: label,
+        coords: [lon, lat],
+        type: 'settlement',
+        region: 'Sumatera',
+        province: 'Sumatera',
+      };
+    }
+  }
 
   const hub = HUB_NODES[nodeId];
   if (hub) {

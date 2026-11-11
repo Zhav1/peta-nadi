@@ -34,6 +34,7 @@ import {
   buildFirmsClusterPopup,
   buildFirmsPopup,
   buildWeatherPopup,
+  escapeHtml,
 } from '@/components/map/mapPopup';
 import {
   Layers,
@@ -942,6 +943,64 @@ export default function CrisisMap({
       );
     };
 
+    // TomTom traffic segment click → speed & flow status popup
+    const handleTrafficClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      if (isClickTargetingRef.current) return;
+      if (!e.features || e.features.length === 0) return;
+      const props: any = e.features[0].properties || {};
+
+      const roadName = escapeHtml(props.road_name || 'Simpul Logistik Tol/Pelabuhan');
+      const currentSpeed = props.current_speed_kmh != null ? `${Number(props.current_speed_kmh).toFixed(0)} km/jam` : '—';
+      const freeFlowSpeed = props.free_flow_speed_kmh != null ? `${Number(props.free_flow_speed_kmh).toFixed(0)} km/jam` : '—';
+
+      const rawLevel = String(props.level || 'moderate').toLowerCase();
+      let statusLabel = 'Arus Padat / Tersendat';
+      let statusColor = '#f59e0b';
+      if (rawLevel === 'low' || rawLevel === 'free' || rawLevel === 'green') {
+        statusLabel = 'Arus Bebas / Lancar';
+        statusColor = '#10b981';
+      } else if (rawLevel === 'heavy') {
+        statusLabel = 'Macet Berat';
+        statusColor = '#ef4444';
+      } else if (rawLevel === 'severe') {
+        statusLabel = 'Macet Parah / Terhenti';
+        statusColor = '#dc2626';
+      } else {
+        statusLabel = 'Arus Padat / Tersendat';
+        statusColor = '#f59e0b';
+      }
+
+      const html = `
+        <div class="ds-popup" role="dialog">
+          <div class="ds-popup__title">
+            <span class="ds-popup__name">${roadName}</span>
+            <span class="ds-popup__meta">Simpul Arus Lalu Lintas (20 Chokepoints)</span>
+          </div>
+          <div class="ds-popup__rows">
+            <div class="ds-popup__row">
+              <span class="ds-popup__label">Status Arus</span>
+              <span class="ds-popup__value font-medium" style="color: ${statusColor}; font-weight: 600;">${escapeHtml(statusLabel)}</span>
+            </div>
+            <div class="ds-popup__row">
+              <span class="ds-popup__label">Kecepatan Aktual</span>
+              <span class="ds-popup__value ds-popup__value--num font-mono">${escapeHtml(currentSpeed)}</span>
+            </div>
+            <div class="ds-popup__row">
+              <span class="ds-popup__label">Kecepatan Bebas</span>
+              <span class="ds-popup__value ds-popup__value--num font-mono">${escapeHtml(freeFlowSpeed)}</span>
+            </div>
+          </div>
+          <div class="ds-popup__rule"></div>
+          <div class="ds-popup__footer">
+            <span class="ds-popup__source">Sensor: TomTom Traffic Flow Telemetry</span>
+            <span class="ds-popup__updated">Cakupan: 20 Simpul Tol &amp; Pelabuhan</span>
+          </div>
+        </div>
+      `;
+
+      openDistilledPopup(e, html);
+    };
+
     // Narrow E2E hook: opens the production popup path with synthetic feature
     // properties. Production never installs it unless NEXT_PUBLIC_E2E=1.
     if (typeof window !== 'undefined' && isE2EHookEnabled()) {
@@ -950,6 +1009,8 @@ export default function CrisisMap({
           handleWeatherClick(fakePopupEvent(properties)),
         openFirmsPopup: (properties: Record<string, unknown>) =>
           handleFirmsClick(fakePopupEvent(properties)),
+        openTrafficPopup: (properties: Record<string, unknown>) =>
+          handleTrafficClick(fakePopupEvent(properties)),
         /**
          * Phase 176.5 — legibility gate. Reads the paint the map instance is
          * actually rendering (not the literal we asked for), so the spec fails
@@ -1514,14 +1575,9 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': [
-            'case',
-            ['any', ['==', ['get', 'safety_status'], 'PRECAUTIONARY_RISK'], ['==', ['get', 'safety_status'], 'HOLD_DELAY']],
-            '#f59e0b',
-            ['coalesce', ['get', 'color'], '#38bdf8']
-          ],
-          'line-width': 4,
-          'line-opacity': 0.85,
+          'line-color': '#64748b',
+          'line-width': 3.5,
+          'line-opacity': 0.55,
           'line-dasharray': [2, 2],
         },
       });
@@ -2031,6 +2087,15 @@ export default function CrisisMap({
         });
       });
 
+      // TomTom traffic congestion segments click & hover
+      map.on('click', 'congestion-segments-line', handleTrafficClick);
+      map.on('mouseenter', 'congestion-segments-line', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'congestion-segments-line', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
       // Tier 3 Settlement & Village WebGL Labels Enhancement (High contrast halo)
       const enhanceSettlementLabels = () => {
         ['settlement-subdivision-label', 'settlement-minor-label', 'settlement-major-label'].forEach((layerId) => {
@@ -2525,6 +2590,9 @@ export default function CrisisMap({
             },
             properties: {
               level: seg.level || 'moderate',
+              road_name: (seg as any).road_name || (seg as any).name || 'Segmen Koridor Rute Aktif',
+              current_speed_kmh: (seg as any).current_speed_kmh ?? (seg as any).current_speed,
+              free_flow_speed_kmh: (seg as any).free_flow_speed_kmh ?? (seg as any).free_flow_speed,
             },
           });
         }
@@ -2544,7 +2612,7 @@ export default function CrisisMap({
             },
             properties: {
               level: String(seg.level || seg.congestion_level || seg.status || 'moderate').toLowerCase(),
-              road_name: seg.road_name || seg.checkpoint || seg.name || 'Koridor Lintas Sumatera',
+              road_name: seg.road_name || seg.checkpoint || seg.name || 'Simpul Logistik Tol/Pelabuhan',
               current_speed_kmh: seg.current_speed_kmh ?? seg.current_speed,
               free_flow_speed_kmh: seg.free_flow_speed_kmh ?? seg.free_flow_speed,
             },
@@ -3582,11 +3650,15 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('bottlenecks')}
- className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
+                        title="Simpul Arus (TomTom) — 20 Simpul Tol & Pelabuhan"
                       >
- <span className="text-[#e8eaed]">Macet</span>
+                        <div className="flex flex-col text-left">
+                          <span className="text-[#e8eaed]">Simpul Arus (TomTom)</span>
+                          <span className="text-[10px] text-[rgba(232,234,237,0.62)]">20 Simpul Tol &amp; Pelabuhan</span>
+                        </div>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
- layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
+                          layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
