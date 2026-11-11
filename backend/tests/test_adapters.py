@@ -64,66 +64,124 @@ async def test_bmkg_parse_earthquake(mock_get_redis):
 
 
 @pytest.mark.asyncio
-async def test_bmkg_severity_mapping():
+@patch("app.adapters.bmkg_adapter.get_redis")
+async def test_bmkg_severity_mapping(mock_get_redis):
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    mock_get_redis.return_value = mock_redis
+
     adapter = BMKGAdapter()
     
-    # Mag < 5.0 should be ignored (returns empty)
-    raw_low = {
+    # Mag < 4.0 should be ignored (returns empty)
+    raw_sub_4 = {
         "earthquake": {
             "Infogempa": {
                 "gempa": {
                     "Tanggal": "06 Jul 2026",
                     "Jam": "12:00:00 WIB",
                     "Coordinates": "3.80,98.69",
-                    "Magnitude": "4.2",  # Under 5.0
+                    "Magnitude": "3.8",  # Under 4.0
+                    "Wilayah": "Sumatera Utara"
+                }
+            }
+        }
+    }
+    events_sub_4 = await adapter.parse(raw_sub_4)
+    assert len(events_sub_4) == 0
+
+    # Deep earthquake (>60km) should be ignored even if M >= 4.0
+    raw_deep = {
+        "earthquake": {
+            "Infogempa": {
+                "gempa": {
+                    "Tanggal": "06 Jul 2026",
+                    "Jam": "12:01:00 WIB",
+                    "Coordinates": "3.80,98.69",
+                    "Magnitude": "5.5",
+                    "Kedalaman": "120 km",
+                    "Wilayah": "Sumatera Utara"
+                }
+            }
+        }
+    }
+    events_deep = await adapter.parse(raw_deep)
+    assert len(events_deep) == 0
+
+    # Mag 4.0 - 4.9 -> Low severity (shallow / default depth)
+    raw_low = {
+        "earthquake": {
+            "Infogempa": {
+                "gempa": {
+                    "Tanggal": "06 Jul 2026",
+                    "Jam": "12:02:00 WIB",
+                    "Coordinates": "3.80,98.69",
+                    "Magnitude": "4.2",
                     "Wilayah": "Sumatera Utara"
                 }
             }
         }
     }
     events_low = await adapter.parse(raw_low)
-    assert len(events_low) == 0
+    assert len(events_low) == 1
+    assert events_low[0]["severity"] == "low"
+    assert events_low[0]["radius_km"] == 1.5
+
+    # Mag 5.0 - 5.9 -> Medium severity
+    raw_med = {
+        "earthquake": {
+            "Infogempa": {
+                "gempa": {
+                    "Tanggal": "06 Jul 2026",
+                    "Jam": "12:03:00 WIB",
+                    "Coordinates": "3.80,98.69",
+                    "Magnitude": "5.5",
+                    "Wilayah": "Sumatera Utara"
+                }
+            }
+        }
+    }
+    events_med = await adapter.parse(raw_med)
+    assert len(events_med) == 1
+    assert events_med[0]["severity"] == "medium"
+    assert events_med[0]["radius_km"] == 3.0
 
     # Mag 6.5 -> High
-    with patch("app.adapters.bmkg_adapter.get_redis") as mock_get_redis:
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = None
-        mock_get_redis.return_value = mock_redis
-        
-        raw_high = {
-            "earthquake": {
-                "Infogempa": {
-                    "gempa": {
-                        "Tanggal": "06 Jul 2026",
-                        "Jam": "12:00:00 WIB",
-                        "Coordinates": "3.80,98.69",
-                        "Magnitude": "6.5",
-                        "Wilayah": "Sumatera Utara"
-                    }
+    raw_high = {
+        "earthquake": {
+            "Infogempa": {
+                "gempa": {
+                    "Tanggal": "06 Jul 2026",
+                    "Jam": "12:04:00 WIB",
+                    "Coordinates": "3.80,98.69",
+                    "Magnitude": "6.5",
+                    "Wilayah": "Sumatera Utara"
                 }
             }
         }
-        events_high = await adapter.parse(raw_high)
-        assert len(events_high) == 1
-        assert events_high[0]["severity"] == "high"
+    }
+    events_high = await adapter.parse(raw_high)
+    assert len(events_high) == 1
+    assert events_high[0]["severity"] == "high"
+    assert events_high[0]["radius_km"] == 5.0
 
-        # Mag 7.2 -> Critical
-        raw_critical = {
-            "earthquake": {
-                "Infogempa": {
-                    "gempa": {
-                        "Tanggal": "06 Jul 2026",
-                        "Jam": "12:05:00 WIB",
-                        "Coordinates": "3.80,98.69",
-                        "Magnitude": "7.2",
-                        "Wilayah": "Sumatera Utara"
-                    }
+    # Mag 7.2 -> Critical
+    raw_critical = {
+        "earthquake": {
+            "Infogempa": {
+                "gempa": {
+                    "Tanggal": "06 Jul 2026",
+                    "Jam": "12:05:00 WIB",
+                    "Coordinates": "3.80,98.69",
+                    "Magnitude": "7.2",
+                    "Wilayah": "Sumatera Utara"
                 }
             }
         }
-        events_crit = await adapter.parse(raw_critical)
-        assert len(events_crit) == 1
-        assert events_crit[0]["severity"] == "critical"
+    }
+    events_crit = await adapter.parse(raw_critical)
+    assert len(events_crit) == 1
+    assert events_crit[0]["severity"] == "critical"
+    assert events_crit[0]["radius_km"] == 5.0
 
 
 @pytest.mark.asyncio
