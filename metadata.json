@@ -3,7 +3,7 @@
   "checkpoint_id": "01M7570JG3BGRABX98NEACAVE3",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "backend/app/services/telemetry_service.py",
     "backend/tests/test_precision_fleet_telemetry.py",
@@ -26,15 +26,21 @@
       "transcript": "/1/full.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "redaction": {
-    "replacements": 0,
+    "replacements": 3,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 0,
+      "credential_value": 3,
       "credentialed_uri": 0,
       "entropy": 0,
       "key_context": 0,
