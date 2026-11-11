@@ -149,7 +149,7 @@ after changing its environment or gateway code.
 
 ### 12. Decommissioned Stubs & Purged Time Replays
 - **Purged Past/Future/Predict Tabs:** Purged mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead backend endpoints (`/historical/episodes`, `/predictive/risks`).
-- **Frontend API Auto-Sanitization:** `getBaseUrl()` automatically reroutes obsolete endpoints to `https://peta-nadi.onrender.com`, preventing 404s and CORS failures.
+- **Frontend API Base Sanitization:** `sanitizeBaseUrl()` (`frontend/lib/baseUrl.ts`) rejects malformed values and decommissioned hosts (e.g. `prehub-backend.onrender.com`) instead of issuing 404/CORS requests. In production the backend base comes from `NEXT_PUBLIC_API_URL`; the built-in fallback constant `PRODUCTION_API_BASE_URL` still points at the Render standby `https://peta-nadi.onrender.com` — TODO: repoint it to the VPS URL (`https://api.177-202-246-251.nip.io`) once the Vercel env configuration is confirmed.
 
 ### 13. Economical 3-Tier News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Failover (Phase 72)
 - **DB-First Economical Ingestion:** `fetch_existing_processed_articles_map()` dedups via Supabase `news_articles` plus in-memory cache before any LLM call, so the 5-minute background RSS cycle never burns duplicate tokens — including for `DROPPED_IRRELEVANT` items.
@@ -229,6 +229,7 @@ after changing its environment or gateway code.
 | **Optimization Engine** | NetworkX Dijkstra Shortest Path Solver & Mapbox Direction APIs |
 | **Weather & Observations** | Open-Meteo Global Meteorological API & BMKG Observation Stations |
 | **Containerization** | Docker Engine 24+, Docker Compose v2 (Multi-stage Next.js standalone runner) |
+| **Hosting & CI/CD** | Backend: Hostinger VPS (Docker Compose, Caddy TLS, `ghcr.io/zhav1/peta-nadi/backend`); Frontend: Vercel; deploys via GitHub Actions |
 
 ---
 
@@ -286,16 +287,27 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml up
   - **Backend Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
   - **System Health Probes:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health) and [http://localhost:8000/health](http://localhost:8000/health)
 
+### 5. Production Deployment (current topology)
+
+The backend no longer runs on Render — the Render `peta-nadi` service remains only as a read-only standby and must not own the tick. What is deployed today:
+
+- **Backend — Hostinger VPS** (`177.202.246.251`, Ubuntu 24.04, deploy dir `/opt/prehub`): Docker Compose runs Caddy (TLS termination for [https://api.177-202-246-251.nip.io](https://api.177-202-246-251.nip.io) via `API_DOMAIN`; nip.io resolves the hostname to the VPS IP until a real domain is configured), exactly **one** uvicorn worker, Redis (`--appendonly yes`, reachable only on the compose network), and the `scheduler` sidecar that POSTs `/internal/tick` every 300 s to drive batch ingestion.
+- **Frontend — Vercel** ([https://pre-hub.vercel.app](https://pre-hub.vercel.app)). The compose `frontend` service is dev-only; never start it on the VPS.
+- **Database — Supabase** (AWS `ap-southeast-1`, Singapore). Migrations are applied manually; CI never runs them.
+- **CI/CD —** `.github/workflows/deploy.yml` on push to `main`: hermetic test gate → build & push `ghcr.io/zhav1/peta-nadi/backend` (GHCR) → SSH to the VPS (`git pull --ff-only`, `up -d --no-deps backend scheduler`) → 90 s health gate with automatic rollback to the previous SHA. A non-blocking `integration` job runs the full suite; known failures are tracked in `docs/TEST_DEBT.md`.
+- **Health probes:** [https://api.177-202-246-251.nip.io/health](https://api.177-202-246-251.nip.io/health) and [https://api.177-202-246-251.nip.io/api/v1/health](https://api.177-202-246-251.nip.io/api/v1/health); tick status at `GET /internal/tick/status`.
+- **Runbooks:** `docs/VPS_DEPLOY.md` (design rationale) and `docs/VPS_AGENT_RUNBOOK.md` (operational).
+
 ---
 
 ## Testing & Verification
 
-### Complete Backend Test Suite (216 Unit, Integration & E2E Tests)
+### Backend Test Suite
 ```bash
 cd backend
 .\.venv\Scripts\python -m pytest tests/ -v
 ```
-All 216 automated tests across 16 test modules pass with 100% reliability, covering data adapters, swarm agents, deterministic CPU Dijkstra routing, weather fusion, economic hedging, BKHIT/MST compliance, AIS vessel continuity, intermodal leg generation, and full pilot drills.
+CI (`.github/workflows/deploy.yml`) gates every deploy to `main` on the hermetic subset (49 of 67 test files — no Redis, Supabase or live provider network needed) plus the frontend build. A non-blocking `integration` job runs the full suite; its known failures are tracked in `docs/TEST_DEBT.md`.
 
 ### Frontend Type Check, Automated Tests & Production Build
 ```bash

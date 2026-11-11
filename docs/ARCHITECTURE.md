@@ -1,6 +1,6 @@
 # PreHub Architecture Documentation
 
-**Version:** 2.0 (Post-Phase 178 Mainland Sumatra Shadow Pilot)  
+**Version:** 2.1 (Post-Phase 181 — VPS deployment & per-section snapshot freshness guard)  
 **Status:** Living Canonical Architecture Document  
 **Canonical Scope:** Mainland Sumatra Logistics Corridors (Aceh through Lampung)  
 
@@ -14,16 +14,19 @@ The architecture enforces five strict invariant principles:
 1. **Deterministic CPU Routing Solver:** Routing optimization uses a deterministic CPU routing adapter (`NetworkX + Google OR-Tools / 2-Opt`) in `backend/app/adapters/cpu_routing_adapter.py`. Theoretical GPU solvers (such as cuOpt) are deprecated and purged.
 2. **Empirical Weather & Spatial Sensor Fusion:** Real-time atmospheric hazards are produced via spatial fusion of official BMKG Radar/CAP alerts and Open-Meteo numerical weather prediction (NWP) in `backend/app/services/weather_fusion_service.py` and `observed_disaster_service.py`.
 3. **Conservative Hazard Evidence Contract (`hazard-evidence-v1`):** Completely eliminates hallucinatory circular buffer expansions. Enforces a strict distinction between confirmed physical road blockages (`CONFIRMED_BLOCKAGE`), atmospheric advisories (`PRECAUTIONARY_RISK`), and unverified data (`UNKNOWN`).
-4. **Distributed Fenced Single-Writer Leases:** Concurrency across distributed worker and server instances (Render, background workers, scheduled cron) is governed by PostgreSQL-backed monotonic fencing leases (`private.refresh_leases`), ensuring single-writer consistency.
+4. **Distributed Fenced Single-Writer Leases:** Concurrency across distributed publisher instances (the VPS backend process and the Render `peta-nadi` read-only standby) is governed by PostgreSQL-backed monotonic fencing leases (`private.refresh_leases`), ensuring single-writer consistency. Only the VPS owns the tick; the Render standby must not drive ingestion.
 5. **Fail-Closed Pilot Shadow Safety:** When operating in research pilot shadow mode (`pilot_shadow_mode = True`), route preview actions return non-mutating preview payloads with zero side effects on production operational tables (`route_approvals`, `travels`).
 
 ---
 
 ## 2. System Architecture Diagram
 
+Production topology: the **backend runs on a Hostinger VPS** (`177.202.246.251`, Ubuntu 24.04, 2 vCPU, deploy dir `/opt/prehub`); the **frontend stays on Vercel**; **Supabase** (AWS `ap-southeast-1`, Singapore) holds the Postgres state. The backend is no longer hosted on Render — the Render `peta-nadi` service remains only as a read-only standby and must not own the tick.
+
 ```
 +---------------------------------------------------------------------------------------------------+
-|                                      FRONTEND (Next.js 14 App Router)                             |
+|                        FRONTEND — Vercel (https://pre-hub.vercel.app)                              |
+|                        Next.js 14 App Router                                                      |
 |                                                                                                   |
 |   +--------------------------+    +--------------------------------+    +---------------------+   |
 |   | DashboardClient / Map    |    | CrisisMap (Mapbox GL JS v3)    |    | FleetVehicleLayer   |   |
@@ -34,65 +37,85 @@ The architecture enforces five strict invariant principles:
 |   +--------------------------+    +--------------------------------+    +---------------------+   |
 +-------------------------------------------------+-------------------------------------------------+
                                                   |
-                     HTTP GET /api/public/dashboard (Edge Route)
-                     Cache-Control: public, s-maxage=30, stale-while-revalidate=60
-                     In-Flight Promise Coalescing (inflightPromise)
+        HTTPS GET /api/public/dashboard (Next.js route handler on Vercel)
+        Cache-Control: public, s-maxage=15, stale-while-revalidate=45 when fresh;
+        honest stale/degraded answers get their own shorter TTLs
+        In-Flight Promise Coalescing (inflightPromise)
                                                   |
                                                   v
 +---------------------------------------------------------------------------------------------------+
-|                                  DATABASE & CACHE LAYER (Supabase + Redis)                         |
+|        BACKEND — Hostinger VPS 177.202.246.251 (Ubuntu 24.04, deploy dir /opt/prehub)              |
 |                                                                                                   |
-|   +------------------------------------+    +-------------------------------------------------+   |
-|   | public.public_dashboard_snapshots  |    | public.public_operational_source_cache         |   |
-|   | - Singleton: sumatra_mainland      |    | - Independent TTLs: BMKG 300s, Open-Meteo 6h,  |   |
-|   | - 12 curated public sections       |    |   FIRMS 3h, TomTom 10m, Disasters 30m           |   |
-|   | - PostgREST anon SELECT            |    | - Stale-While-Revalidate read model             |   |
-|   +------------------------------------+    +-------------------------------------------------+   |
-|   | private.refresh_leases (Fenced)    |    | private.provider_budget_counters (Atomic Quotas)|   |
-|   +------------------------------------+    +-------------------------------------------------+   |
+|   Caddy (:80/:443) terminates TLS for api.177-202-246-251.nip.io (Let's Encrypt via                |
+|   {$API_DOMAIN}; nip.io resolves the hostname to the VPS IP until a real domain is set).           |
+|   reverse_proxy -> backend:8000, published on 127.0.0.1 only                                       |
+|                                                                                                   |
+|   +------------------------------------+    +------------------------------------+                |
+|   | backend (exactly ONE uvicorn worker)|   | scheduler (curl sidecar)            |                |
+|   | image: ghcr.io/zhav1/peta-nadi/     |   | POST /internal/tick every 300 s     |                |
+|   | backend:<git sha>                   |   | (X-Internal-Token; 202 -> sleep)    |                |
+|   | - AIS WebSocket + validated-alert   |   | - tick_max_jobs = 6                 |                |
+|   |   fan-out consumer start per        |   | - tick_budget_seconds = 200         |                |
+|   |   process (NOT gated on             |   |   (below the 240 s lease TTL)       |                |
+|   |   POLLERS_ENABLED;                  |   +------------------------------------+                |
+|   |   INPROCESS_BATCH_POLLERS = false)  |                                                         |
+|   +------------------------------------+                                                         |
+|                                                                                                   |
+|   Multi-Source Disaster Detection / Hybrid Road Congestion / CPU Routing Adapter                  |
+|   (unchanged — described in sections 5–6)                                                          |
+|                                                                                                   |
+|   redis: redis:7-alpine, reachable only on the compose network, --appendonly yes                    |
 +-------------------------------------------------+-------------------------------------------------+
                                                   |
-                                Scheduled Background Refresh
-                                Monotonic Lease: acquire_refresh_lease()
+            Supabase (AWS ap-southeast-1, Singapore): Postgres + PostGIS
+            - public.public_dashboard_snapshots (singleton sumatra_mainland)
+            - private.public_snapshot_sections (per-section durable store)
+            - private.refresh_leases (fenced) / private.provider_budget_counters (atomic quotas)
                                                   |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|                                  BACKEND SERVICES (FastAPI / Python 3.11+)                        |
-|                                                                                                   |
-|   +----------------------------------+    +----------------------------------+                    |
-|   | Multi-Source Disaster Detection  |    | Hybrid Road Congestion Engine    |                    |
-|   | - BMKG CAP (Polygon nowcasts)    |    | - TomTom 12 Trans-Sumatra Corrs  |                    |
-|   | - GDACS (Global disaster alert)  |    | - 10-Min Cache Guard (<=150/day) |                    |
-|   | - Open-Meteo GloFAS (Floods)     |    | - Empirical baseline fallback    |                    |
-|   | - PetaBencana (ISO 3166-2 bounds)|    | - Mapbox Traffic vector tiles    |                    |
-|   | - BNPB CKAN statistical aggregates|   +----------------------------------+                    |
-|   | - Deterministic 15-35 km radii   |                     |                                      |
-|   +----------------------------------+                     v                                      |
-|                     |                     +----------------------------------+                    |
-|                     +-------------------->| CPU Routing Adapter (NetworkX)   |                    |
-|                                           | - 2-Opt / OR-Tools optimization  |                    |
-|                                           | - Hazard & Traffic Edge Costs    |                    |
-|                                           | - Viable Detours with Waypoints  |                    |
-|                                           +----------------------------------+                    |
+            publish_public_dashboard_snapshot() — fenced, per-section evidence-freshness guard
 +---------------------------------------------------------------------------------------------------+
 ```
+
+### Deployment pipeline (CI/CD)
+
+`.github/workflows/deploy.yml` on push to `main`:
+
+1. **Hermetic test gate** (backend tests that need no Redis, Supabase or live provider network) plus the frontend build.
+2. **Build & push** the backend image to GHCR (`ghcr.io/zhav1/peta-nadi/backend`, public).
+3. **SSH to the VPS**: `git pull --ff-only` (never force/reset), `docker compose pull backend scheduler`, `up -d --no-deps backend scheduler`.
+4. **Health gate**: poll the health URL up to 90 s; on failure the workflow re-ups the previous SHA recorded in `.deployed_sha` (automatic rollback).
+5. A **non-blocking `integration` job** runs the full backend suite; its known failures are tracked in `docs/TEST_DEBT.md`.
+
+Migrations are applied **manually** — the pipeline never runs `supabase db push` or any migration. Recently applied: `20261107210000_phase179_versioned_snapshot_realtime.sql` (versioned snapshots + `ingest_runs` audit table), `20261110120000_phase180_section_freshness_guard.sql` (per-section evidence freshness guard), `20261110130000_phase181_section_guard_degraded.sql` (the guard also persists `degraded` sections).
+
+cron-job.org and `.github/workflows/keep-alive.yml` are legacy; ingestion is driven solely by the compose `scheduler` sidecar.
 
 ---
 
 ## 3. Sub-2000ms Multi-User Hydration (SWR & Single-Flight Coalescing)
 
-To ensure sub-2000ms hydration for concurrent users on resource-constrained free-tier hosting (Vercel Edge and Render), PreHub employs a three-tier Stale-While-Revalidate (SWR) and request coalescing pattern:
+To ensure sub-2000ms hydration for concurrent users, PreHub employs a three-tier Stale-While-Revalidate (SWR) and request coalescing pattern. The frontend runs on Vercel while the backend is a single uvicorn worker on the VPS, so hot anonymous traffic is absorbed by the edge handler plus the database snapshot singleton instead of per-user backend work:
 
-1. **Vercel Edge Route Handler (`frontend/app/api/public/dashboard/route.ts`):**
-   - Serves cached responses using `Cache-Control: public, s-maxage=30, stale-while-revalidate=60`.
-   - Implements promise-level in-flight deduplication (`inflightPromise`). Concurrent edge invocations await the exact same promise rather than issuing separate backend fetches.
-   - Enforces a 1.8-second timeout guard (`SNAPSHOT_TIMEOUT_MS = 1800`), falling back to `lastKnownGoodResult` or an offline unknown projection if the database read stalls.
+1. **Next.js Route Handler (`frontend/app/api/public/dashboard/route.ts`) on Vercel:**
+   - Serves cached responses with per-state `Cache-Control`: `public, s-maxage=15, stale-while-revalidate=45` when fresh, `public, s-maxage=30, stale-while-revalidate=120` when honestly `stale`, and shorter TTLs for `degraded` and unknown answers.
+   - Implements promise-level in-flight deduplication (`inflightPromise`). Concurrent invocations await the exact same promise rather than issuing separate backend or database fetches.
+   - Enforces a 6-second timeout guard (`SNAPSHOT_TIMEOUT_MS = 6000`) on the Supabase snapshot read and a 2.5-second guard (`BACKEND_FALLBACK_TIMEOUT_MS = 2500`) on the backend bootstrap fallback, falling back to `lastKnownGoodResult` (re-marked stale) or an honest degraded envelope if both stall.
 2. **FastAPI In-Flight Task Coalescing (`_INFLIGHT_REFRESH` & `_INFLIGHT`):**
    - In `backend/app/routers/dashboard_bootstrap.py` and `backend/app/routers/routing_router.py`, background revalidation tasks are tracked by corridor in memory.
    - If multiple requests trigger revalidation while a build task is running, they share the single in-flight task without spinning up redundant background workers.
 3. **Database Snapshot Singleton (`public.public_dashboard_snapshots`):**
    - Curated `sumatra_mainland` row contains 12 verified sections covering all 8 mainland provinces.
    - Decoupled completely from user authorization; anonymous and authenticated visitors read the identical projection at high speed without executing live database joins or external API queries.
+
+### Per-Section Evidence-Freshness Contract (Phase 180/181)
+
+Snapshot publishing (`publish_public_dashboard_snapshot()`, migrations `20261110120000_phase180` and `20261110130000_phase181`) enforces a per-section freshness guard on top of the lease fence:
+
+- **Evidence stamp:** a section's stamp is `observed_at`, else `valid_until`. `computed_at` is deliberately NOT part of the comparison — it says when the payload was assembled, not how old the evidence inside it is.
+- **Fresher evidence only:** an incoming section replaces the stored row only when its evidence stamp is `>=` the stored row's (ties are accepted so a status transition such as `ok -> stale` can still publish). A section may therefore only ever be replaced by fresher or equally-fresh evidence — an older observation can never overwrite a newer one, even across publishers with different `computed_at` (the Phase 180 defect: a worker holding 43-minute-old traffic evidence overwrote a 2-minute-old row).
+- **Stamp-less sections:** a section with no evidence stamp may only replace a stored row that also has none, or one whose `valid_until` has already lapsed — so it neither silently wins over live evidence nor is frozen out forever.
+- **Honest degradation:** `degraded` and `stale` are published as-is, never rewritten to `ok`. Phase 181 extends the guard to persist degraded-but-fresh observations under the same rule (e.g. a TomTom tick with 19/20 checkpoint coverage stores `degraded` with its error, instead of being dropped and leaving the section `stale` forever).
+- **Lease fence unchanged:** `p_lease_name` / `p_owner_id` / `p_fence` / expiry behave exactly as before; the guard only constrains the per-section upsert.
 
 ---
 
@@ -169,9 +192,12 @@ To provide a unified God's-Eye operational view across multimodal fleets:
 
 ## 8. Verification & Test Evidence
 
-All architectural claims are verified by automated tests:
-- `backend/tests/test_backend_plan_implementation.py`: 6/6 tests passing (disaster radii, TomTom traffic, single-flight coalescing, plane telemetry, CPU routing detours, seed demo).
-- `backend/tests/test_hazard_routing_evidence.py`, `test_observed_disaster_service.py`, `test_pilot_shadow_safety.py`, `test_public_operational_cache.py`, `test_public_snapshot_coordination.py`: 55/55 Phase 178 tests passing.
-- Affected router regression suites (`test_dashboard_bootstrap.py`, `test_internal_tick.py`, etc.): 68/68 tests passing.
-- Total backend test suite: **129 tests passing** with zero regressions.
-- Frontend TypeScript typecheck: `tsc -p tsconfig.json --noEmit` passing with **0 errors**.
+## 8. Verification & Test Evidence
+
+Verification is enforced by CI (`.github/workflows/deploy.yml`) on every push to `main`:
+
+- **Hermetic backend gate:** the subset of `backend/tests` that needs no Redis, Supabase or live provider network (49 of 67 test files) must pass in a no-`.env` environment before an image is built.
+- **Frontend build:** `npm run build` (TypeScript compile included) must succeed.
+- **Non-blocking `integration` job:** runs the full backend suite with Redis; its known failures are tracked in `docs/TEST_DEBT.md` rather than blocking deploys.
+
+Snapshot-coordination and tick behavior are covered by `backend/tests/test_public_snapshot_coordination.py` (last-good section merge by evidence stamp, mirroring the SQL guard) and `backend/tests/test_internal_tick.py`, both in the hermetic gate.
