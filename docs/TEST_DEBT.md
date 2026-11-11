@@ -2,9 +2,9 @@
 
 **Status (re-verified 2026-11-11 against a fresh checkout of `main`, no `.env`,
 repo venv):** the backend suite collects **773 tests across 71 files** in
-`backend/tests`. The 18 files ignored by the CI gate account for **59
+`backend/tests`. The 17 files ignored by the CI gate account for **59
 failures** in that environment (per-file counts in the table below). The
-hermetic gate is **green: 602 passed, 0 failed**.
+hermetic gate is **green: 610 passed, 0 failed**.
 
 `.github/workflows/deploy.yml` splits the suite. The **`test` job is the
 blocking gate**; the full suite is **non-blocking** (`integration` job with
@@ -15,18 +15,18 @@ without blocking every deploy on it.
 
 | Job | Scope | Blocking |
 |---|---|---|
-| `test` | 53 hermetic test files (602 tests) | **yes** |
+| `test` | 54 hermetic test files (610 tests) | **yes** |
 | `integration` | full suite (773 tests), with a Redis service container | no (`continue-on-error`) |
 
 The hermetic gate was derived empirically: run the suite with no `.env`, take
 every file with zero failures. Re-derive it the same way if this drifts.
-Re-derived on 2026-11-11: 71 files − 18 ignored = 53 hermetic files, 602
+Re-derived on 2026-11-11: 71 files − 17 ignored = 54 hermetic files, 610
 passed / 0 failed with the workflow's exact `--ignore` list.
 
 ## Ignored files and why
 
 The list below matches the `--ignore=` flags in the `test` job of
-`.github/workflows/deploy.yml` **exactly** (re-checked 2026-11-11 — 18 files,
+`.github/workflows/deploy.yml` **exactly** (re-checked 2026-11-11 — 17 files,
 same set). The workflow is the source of truth; if these two lists ever
 diverge, fix this doc first.
 
@@ -49,30 +49,23 @@ machine; a fully network-sealed runner may fail a few more).
 | `test_api_routers.py` | 2 | 2 | Supabase |
 | `test_backend_plan_implementation.py` | 2 | 2 | provider network |
 | `test_outcomes_decisions.py` | 2 | 2 | Supabase 403 assertions |
-| `test_weather_summary_contract.py` | **0** | 1 | BMKG network |
 | `test_impact_assessment.py` | 1 | 1 | Supabase spatial fixtures |
 | `test_evaluation_router.py` | 1 | 1 | Supabase corridor data |
 | `test_precision_fleet_telemetry.py` | 1 | 1 | **live AIS vessel count** — the lean-payload assertion (<250 KB) depends on how many vessels are in the shared Upstash cache at that moment. Fails identically on clean `HEAD`; not a code defect. |
 | `test_paths_resolution.py` | 1 | 1 | `PREHUB_DB_PATH` is not read by `config.py` (dead env var) |
 
-### Doc/code mismatch to fix in the workflow
-
-`test_weather_summary_contract.py` now passes (0 failures in the no-`.env`
-checkout — the single BMKG-network failure listed here historically has been
-fixed), but it is **still in the workflow's `--ignore=` list**. Removing it is
-a one-line workflow edit that re-claims its tests for the blocking gate; this
-doc is not the blocker. Left as-is here because this change is doc-only.
-
 ## Paying it down
 
-1. Remove `test_weather_summary_contract.py` from the `test` job's `--ignore`
-   list — it is already green (see mismatch note above).
-2. Start with `test_paths_resolution.py` — it is a one-line config fix (either
+1. Start with `test_paths_resolution.py` — it is a one-line config fix (either
    wire `PREHUB_DB_PATH` into `Settings` or delete the env var from
    `render.yaml` / `docker-compose.yml`).
-3. `test_precision_fleet_telemetry.py` should assert a *ratio*, not an absolute
+2. `test_precision_fleet_telemetry.py` should assert a *ratio*, not an absolute
    byte ceiling, or pin the fleet to a fixture.
-4. The Supabase-dependent files need a seeded test project or a Postgres
+3. The Supabase-dependent files need a seeded test project or a Postgres
    service container with the migrations applied — that is the real project.
-5. As each file goes green, remove its `--ignore` from the `test` job and update
+4. As each file goes green, remove its `--ignore` from the `test` job and update
    the table above.
+
+**Done:** `test_weather_summary_contract.py` was re-claimed by the blocking gate
+on 2026-11-11 (8 tests, 0 failures) — its `--ignore` was removed from the
+workflow and the gate went from 602 to 610 passing tests.

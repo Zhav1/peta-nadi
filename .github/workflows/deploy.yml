@@ -54,7 +54,6 @@ jobs:
             --ignore=tests/test_api_routers.py \
             --ignore=tests/test_backend_plan_implementation.py \
             --ignore=tests/test_outcomes_decisions.py \
-            --ignore=tests/test_weather_summary_contract.py \
             --ignore=tests/test_impact_assessment.py \
             --ignore=tests/test_evaluation_router.py \
             --ignore=tests/test_precision_fleet_telemetry.py \
