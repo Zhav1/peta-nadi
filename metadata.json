@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.13.2",
+  "checkpoint_id": "01M757167NJQCYZXM14WT4QJJQ",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "backend/app/adapters/bmkg_adapter.py",
+    "backend/app/adapters/cpu_routing_adapter.py",
+    "backend/app/routers/internal_tick.py",
+    "backend/app/routers/routing_router.py",
+    "backend/app/services/adm_boundary_service.py",
+    "backend/app/services/hazard_evidence.py",
+    "backend/app/services/job_scheduler.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "redaction": {
+    "replacements": 3,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 0,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
