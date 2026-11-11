@@ -77,7 +77,8 @@ checkpoint coverage; `news` and `incidents` may report `stale` when no qualifyin
 exist. The system now reports truthfully instead of fabricating `ok`.
 
 Status: M8 160-164 DONE · 165 PARTIAL · 166 NOT STARTED · 164b (sync-I/O sweep) DEFERRED ·
-post-milestone phases 177-181 deployed to the VPS.
+post-milestone phases 177-182 deployed / completed.
+Phase 182 (Hazard Routing, TomTom Traffic, Overlapping Route De-emphasis, Fleet Dissolve, Recharts Loop & Sumut Framing) COMPLETE across 5 slices (182-01..182-05).
 Next action: watch the first week of VPS operation (health gate, scheduler logs,
 `/internal/tick/status`, provider budgets) and keep applying Supabase migrations manually
 before or with each deploy. Do not re-enable the Render standby as a publisher.
