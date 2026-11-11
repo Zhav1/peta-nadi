@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.13.2",
+  "checkpoint_id": "01M756ZWNMV2KATDK21GJHFPEY",
+  "session_id": "b594238b-418f-43fd-8986-c379d23870d1",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-11T11:48:20.7488332Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "frontend/components/dashboard/LaporanCharts.tsx",
+    "frontend/components/dashboard/LaporanHybridPanel.tsx"
+  ],
+  "agent": "Antigravity",
+  "model": "gemini-3.8-flash-tiered",
+  "turn_id": "a71ad3579926",
+  "token_usage": {
+    "input_tokens": 686694,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 40889199,
+    "output_tokens": 109524,
+    "api_call_count": 241
+  },
+  "session_token_usage": {
+    "input_tokens": 686694,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 40889199,
+    "output_tokens": 109524,
+    "api_call_count": 241
+  },
+  "redaction": {
+    "replacements": 2,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 1,
+      "credentialed_uri": 0,
+      "entropy": 1,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 1
+  }
+}
