@@ -12,7 +12,6 @@ import {
   Radio,
   RotateCcw,
   Compass,
-  MapPin,
   Truck,
   X,
   Newspaper,
@@ -795,9 +794,6 @@ export default function DashboardClient() {
   }, []);
 
   const bootstrapSections = realtimeSections ?? bootstrap.data?.sections;
-  // M10 honest snapshot staleness: derive the badge age from `computed_at`
-  // (FreshnessBadge does that) and keep the data painted — never blanked.
-  const snapshotKnownStale = bootstrap.stale && !!bootstrap.data;
   const seededIncidentsSection = bootstrapSections?.incidents;
   const rawSeededIncidents =
     ['ok', 'stale'].includes(seededIncidentsSection?.status ?? '')
@@ -1189,7 +1185,7 @@ export default function DashboardClient() {
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
   // Phase 163b: seeded by `sections.news` + `sections.news_market_regime`; the
   // seed still passes through the same permalink/freshness/discourse gates.
-  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, meta: newsBreadthMeta } = useNewsVerification({
+  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, lastGoodAt: newsLastGoodAt, meta: newsBreadthMeta } = useNewsVerification({
     enabled: !bootstrap.isLoading && activeSection === 'map',
     snapshotOnly: true,
     initialNews: seededNews,
@@ -1523,10 +1519,15 @@ export default function DashboardClient() {
   }, [newsFeed, forecastNowMs, disasterZones]);
 
   // Global "diperbarui" clock for the feed, kept separate from each article's
-  // published_at. Only advances when the hook sees a changed article set.
+  // published_at. Falls back to the hook's lastGoodAt so the badge stays honest
+  // when no article timestamp survived the permalink/freshness gates.
   const newsLastUpdatedDate = useMemo(
-    () => (newsLastUpdated ? new Date(newsLastUpdated) : null),
-    [newsLastUpdated]
+    () => (newsLastUpdated
+      ? new Date(newsLastUpdated)
+      : newsLastGoodAt
+        ? new Date(newsLastGoodAt)
+        : null),
+    [newsLastUpdated, newsLastGoodAt]
   );
 
   // PostGIS hazard polygons attached to the selected crisis. The backend already
@@ -3561,14 +3562,6 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
     const nowIso = new Date().toISOString();
     const crisisId = newsItem?.id ? `audit-${newsItem.id}` : (fallbackZone?.id || fallbackZone?.crisis_id || 'audit-zone');
 
-    const mkFinding = (agent: string, conf: number, text: string) => ({
-      agent,
-      confidence: conf,
-      summary: text,
-      data: { source_mode: 'LIVE_API', stored_news_id: newsItem?.id || fallbackZone?.source_news_id || crisisId } as Record<string, unknown>,
-      timestamp: nowIso,
-    });
-
     const siblingCitations = newsFeed
       .filter((n) => {
         // Phase 172.5: regional context is never hazard evidence.
@@ -3646,39 +3639,15 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
       lon,
       region: corridorSegment.replace(/ — /g, '_').replace(/ /g, '_').toLowerCase() || 'koridor_sumatera',
       status: 'validated',
-      overall_confidence: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64,
-      data_collection_finding: mkFinding(
-        'data_collection',
-        zoneTier === 'RED_CONFIRMED' ? 0.9 : 0.62,
-        `Sensor & traffic koridor ${corridorSegment}: status jalur ${passability}, moda terdampak ${affectedModalities}. Data tersimpan dari pipeline LIVE API.`
-      ),
-      osint_hazard_finding: mkFinding(
-        'osint_hazard',
-        zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64,
-        `Verifikasi ${source}: "${title}". ${tierReason}`
-      ),
-      prediction_finding: mkFinding(
-        'prediction',
-        zoneTier === 'RED_CONFIRMED' ? 0.88 : 0.6,
-        zoneTier === 'RED_CONFIRMED'
-          ? `Prakiraan spasial: radius ${radiusKm} km di sekitar [${lon.toFixed(3)}, ${lat.toFixed(3)}] tetap berisiko ${passability}; hindari koridor ${corridorSegment}.`
-          : `Prakiraan spasial: potensi gangguan terbatas di ${corridorSegment}; siaga klarifikasi lanjutan sebelum reroute penuh.`
-      ),
-      route_optimization_finding: mkFinding(
-        'route_optimization',
-        routes.length > 0 ? 0.9 : 0.66,
-        forecastActive
-          ? `Prakiraan waspada dini: informasi pantauan saja, belum perlu tindakan. Pengalihan rute maupun penahanan armada tidak dihitung untuk koridor ${corridorSegment}.`
-          : routes.length > 0
-          ? `${routes.length} koridor darat/laut/udara dihitung ulang menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}, ${passability}).`
-          : `Pilih Titik Asal & Tujuan untuk menghitung ulang koridor menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}).`
-      ),
-      economic_intelligence_finding: mkFinding(
-        'economic_intelligence',
-        0.7,
-        `Estimasi penundaan ~${impactProfile?.estimated_delay_hours ?? (zoneTier === 'RED_CONFIRMED' ? 8 : 2)} jam untuk komoditas ${newsItem?.commodity_name || 'pangan pokok'}; pantau harga PIHPS koridor ${corridorSegment}.`
-      ),
-      decision_support_output: `${customHazardLabel} — ${forecastActive ? 'Prakiraan Waspada Dini (YELLOW_CLARIFY, belum terkonfirmasi)' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah terkonfirmasi' : 'Zona Kuning perlu klarifikasi'} di ${corridorSegment}. ${tierReason} Ringkasan tersimpan: ${summary} Moda terdampak: ${affectedModalities} (status ${passability}).`,
+      // M9 decision 7: confidence is real data only — zone consensus confidence
+      // or the audit's calibrated pred_prob; never a 0.92/0.64 stand-in. When
+      // neither exists the sidebar renders "Keyakinan belum tersedia".
+      overall_confidence: fallbackZone?.confidence ?? newsItem?.verification_audit?.pred_prob ?? undefined,
+      // Per-agent findings are NOT synthesized here: the consensus audit already
+      // carries the real evidence (tier_reason, verification_audit, citations)
+      // and the Bukti tab renders it directly. Fabricated per-agent payloads
+      // with stand-in confidences were removed with the pipeline-debug slop.
+      decision_support_output: `${customHazardLabel} — ${forecastActive ? 'Prakiraan Waspada Dini (YELLOW_CLARIFY, belum terkonfirmasi)' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah terkonfirmasi' : 'Zona Kuning perlu klarifikasi'} di ${corridorSegment}. ${tierReason} Moda terdampak: ${affectedModalities} (status ${passability}).`,
       route_recommendations: routes,
       verified_news_citations: siblingCitations.length > 0 ? siblingCitations : [{
         headline: title,
@@ -3688,11 +3657,14 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
         link_alive: newsItem?.link_alive || 'unknown',
         temporal_phase: newsItem?.temporal_phase,
       }],
+      // M9 truth: 3-node chain, neutral verbs, no fabricated impact scores.
+      // The LLM-attribution verb ("diklasifikasikan LLM sebagai") is only
+      // legitimate when the pipeline actually used the LLM (llm_used on the
+      // audit); zone tier here is a deterministic consensus read.
       causal_chain: [
-        { name: `Sumber Berita (${source})`, relation: 'melaporkan', impact_score: 0.9 },
-        { name: forecastActive ? 'Prakiraan Waspada Dini: Belum Terkonfirmasi' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah: Bencana Aktif' : 'Zona Kuning: Perlu Klarifikasi', relation: 'diklasifikasikan LLM sebagai', impact_score: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64 },
-        { name: `Dampak Moda (${affectedModalities})`, relation: 'mengganggu', impact_score: 0.75 },
-        { name: `Mitigasi Koridor (${corridorSegment})`, relation: 'dialihkan via', impact_score: 0.8 },
+        { name: `Sumber Berita (${source})`, relation: 'melaporkan' },
+        { name: forecastActive ? 'Prakiraan Waspada Dini: Belum Terkonfirmasi' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah: Bencana Aktif' : 'Zona Kuning: Perlu Klarifikasi', relation: 'menandai' },
+        { name: `Dampak Moda (${affectedModalities})`, relation: 'mengganggu' },
       ],
       zone_tier: zoneTier,
       tier: fallbackZone?.tier || (zoneTier === 'RED_CONFIRMED' ? 'CONFIRMED' : 'WATCH'),
@@ -4330,18 +4302,6 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                       <FreshnessBadge lastUpdated={newsLastUpdatedDate} sourceLabel="" />
                     </span>
                   )}
-                  {snapshotKnownStale && bootstrap.data && (
-                    <span
-                      data-testid="snapshot-stale-badge"
-                      title="Snapshot publik tertunda — data terakhir tetap ditampilkan"
-                    >
-                      <StatusFreshnessBadge
-                        status="stale"
-                        updatedAt={bootstrap.data.computed_at ?? null}
-                        reason={null}
-                      />
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -4579,13 +4539,6 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                             Belum bencana terkonfirmasi (zona kuning). Waspada — pantau, belum perlu tindakan — tanpa pengalihan rute.
                           </p>
                           <FreshnessBadge lastUpdated={null} expiresAt={item.forecast_valid_until} />
-                        </div>
-                      )}
-
-                      {item.affected_locations && item.affected_locations.length > 1 && (
-                        <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-sans leading-snug flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)] shrink-0" />
-                          <span>{item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}</span>
                         </div>
                       )}
 

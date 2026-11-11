@@ -26,15 +26,19 @@ _EWKB_GEOM_TYPE_MASK = 0x0FFFFFFF
 _EWKB_POINT_TYPE = 1
 _WGS84_SRID = 4326
 
-# Migration 010 projection: concrete lat/lon columns alongside the legacy WKT 'location'
+# Migration 010 projection: concrete lat/lon columns alongside the legacy WKT 'location'.
+# WS-A stored forecast: pred_prob/raw_prob/p_max/weights_version are top-level
+# columns (written verbatim from the consensus audit by unified_news_ingestor).
 INCIDENT_COLUMNS_WITH_COORDS = (
     "incident_id, title, type, severity, status, confidence, created_at, "
-    "location, lat, lon, description, affected_area"
+    "location, lat, lon, description, affected_area, "
+    "pred_prob, raw_prob, p_max, weights_version"
 )
 # Pre-migration-010 projection (WKT 'location' only)
 INCIDENT_COLUMNS_LEGACY = (
     "incident_id, title, type, severity, status, confidence, created_at, "
-    "location, description, affected_area"
+    "location, description, affected_area, "
+    "pred_prob, raw_prob, p_max, weights_version"
 )
 
 
@@ -153,6 +157,11 @@ class IncidentResponse(BaseModel):
     created_at: datetime
     affected_area: Optional[Any] = None
     geometry_role: Optional[str] = None
+    # WS-A stored forecast (consensus audit, verbatim; NULL when the audit predates it)
+    pred_prob: Optional[float] = None
+    raw_prob: Optional[float] = None
+    p_max: Optional[float] = None
+    weights_version: Optional[str] = None
 
 
 class IncidentListResponse(BaseModel):

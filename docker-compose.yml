@@ -66,6 +66,10 @@ services:
       - PORT=8000
       - REDIS_URL=redis://prehub-redis:6379
       - REDIS_PASSWORD=
+      # Dispatcher writes (fleet/travels/approvals/outcomes) must persist on the
+      # VPS operational deployment. render.yaml/koyeb.yaml keep shadow=true for
+      # the research pilot; compose is the live pilot deployment.
+      - PILOT_SHADOW_MODE=false
       - PREHUB_DB_PATH=/app/data/prehub_local.db
     depends_on:
       redis:

@@ -251,20 +251,38 @@ def _mask_route_endpoint_pairs_when_specific_pass_present(text_lower: str) -> st
     e.g. "jalan lintas pekanbaru-padang via sitinjau lauik" -> the
     "pekanbaru-padang" road-name substring is blanked so the cities inside the
     road's name are never mistaken for the landslide pinpoint.
+
+    When no real pass is named, a bare route pair itself ("tol
+    pekanbaru-dumai") also triggers masking — but only the SECOND endpoint is
+    masked while the first stays in the text as the single primary location
+    ("kecelakaan di Tol Pekanbaru–Dumai" resolves to Pekanbaru, never Dumai).
     """
-    has_pass = any(p in text_lower for p in _SPECIFIC_PASS_KEYS)
-    has_via = ("via " in text_lower) or re.search(r'\bdi\s+[a-z]', text_lower) is not None
+    has_real_pass = any(p in text_lower for p in _SPECIFIC_PASS_KEYS)
+    has_route_pair = _ROUTE_PAIR_RE.search(text_lower) is not None
+    has_pass = has_real_pass or has_route_pair
     if not (has_pass or ("via " in text_lower)):
-        # Require either a known pass or an explicit via-connector before masking,
-        # to avoid nuking legitimate "A-B" incident mentions.
-        if not has_pass:
-            return text_lower
-    def _repl(m: re.Match) -> str:
-        return " "
-    masked = _ROUTE_PAIR_RE.sub(_repl, text_lower)
-    # Also handle "tol padang-pekanbaru"-style without jalan/jalur prefix
-    masked2 = re.sub(r'\btol\s+([a-z]+)\s*[-–—/]\s*([a-z]+)', ' ', masked, flags=re.IGNORECASE)
-    return masked2
+        # Require either a known pass / route pair or an explicit via-connector
+        # before masking, to avoid nuking legitimate "A-B" incident mentions.
+        return text_lower
+
+    if has_real_pass:
+        # Real pass named (sitinjau etc.): blank the entire pair so neither
+        # endpoint competes with the pass pinpoint (existing behavior).
+        masked = _ROUTE_PAIR_RE.sub(" ", text_lower)
+        # Also handle "tol padang-pekanbaru"-style without jalan/jalur prefix
+        return re.sub(r'\btol\s+([a-z]+)\s*[-–—/]\s*([a-z]+)', ' ', masked, flags=re.IGNORECASE)
+
+    # Route-pair-only: keep endpoint A as the location, mask endpoint B.
+    def _keep_first_endpoint(m: re.Match) -> str:
+        return m.group(1)
+
+    masked = _ROUTE_PAIR_RE.sub(_keep_first_endpoint, text_lower)
+    return re.sub(
+        r'\btol\s+([a-z]+)\s*[-–—/]\s*([a-z]+)',
+        _keep_first_endpoint,
+        masked,
+        flags=re.IGNORECASE,
+    )
 
 
 def _norm_key_pattern(key: str) -> str:
@@ -367,12 +385,11 @@ def resolve_all_sumatra_locations(text: str, fallback_province: Optional[str] = 
         if key in BARE_PROVINCE_KEYS:
             continue
         pat = _norm_key_pattern(key)
-        # For specificity filtering, Tier-2 membership is tested against the
-        # masked text so road-name endpoints (pekanbaru/padang) don't count.
-        haystack = text_lower if tier == 1 else masked_lower
-        # Tier 3 macro-corridors also tested on masked text.
-        if tier == 3:
-            haystack = masked_lower
+        # For specificity filtering, ALL tiers are tested against the masked text
+        # so road-name endpoints never count as locations — including Tier-1
+        # corridor nodes (e.g. port-city Dumai inside "tol pekanbaru-dumai").
+        # When no mask fired, masked_lower == text_lower and nothing changes.
+        haystack = masked_lower
         try:
             if not re.search(pat, haystack):
                 continue
@@ -568,7 +585,11 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: Optional
             "is_geocoded": True,
             "location_precision": top.get("location_precision", "corridor_point"),
             "location_precision_legacy": top.get("location_precision_legacy", "exact_node"),
-            "affected_locations": locations,
+            # ONE primary zone location per news item (orchestrator decision A):
+            # extra mentioned places stay in the article raw text only. The full
+            # match list is kept under `mentioned_locations` for debugging.
+            "affected_locations": [top],
+            "mentioned_locations": locations,
         }
 
     # CRITICAL FIX: No blind fallback-centroid assignment, and never echo the
@@ -583,5 +604,6 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: Optional
         "location_precision": "none",
         "location_precision_legacy": "none",
         "affected_locations": [],
+        "mentioned_locations": [],
     }
 

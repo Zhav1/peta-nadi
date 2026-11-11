@@ -824,7 +824,7 @@ async def build_public_snapshot() -> dict:
     (operational, observed, owner_errors), (incident_rows, incident_error), (news_rows, news_error) = await asyncio.gather(
         _read_owner_caches(),
         asyncio.to_thread(_response_rows, "incidents", 50),
-        asyncio.to_thread(_response_rows, "news_articles", 60),
+        asyncio.to_thread(_response_rows, "news_articles", 120),
     )
     built_dt = _now()
     built_at = _iso(built_dt)

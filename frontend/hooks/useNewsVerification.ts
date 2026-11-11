@@ -314,7 +314,7 @@ export function normalizeNewsPermalink(rawUrl?: string, _headline?: string, _sou
 }
 
 /**
- * Client-side 48-hour freshness + discourse defense-in-depth guard.
+ * Client-side 168-hour freshness + discourse defense-in-depth guard.
  * Mirrors backend verification gate so stale/archival/opinion items never render zones.
  */
 export function validateClientNewsFreshnessAndDiscourse(
@@ -328,7 +328,7 @@ export function validateClientNewsFreshnessAndDiscourse(
   const safeSummary = typeof summary === 'string' ? summary : '';
   const safePub = typeof rawPubDate === 'string' ? rawPubDate : '';
 
-  // 1. Archival URL check: embedded YYYY or YYYY/MM/DD older than 48h.
+  // 1. Archival URL check: embedded YYYY or YYYY/MM/DD older than 168h.
   if (safeLink) {
     const fullMatch = safeLink.match(/\/(20\d{2})\/(\d{1,2})\/(\d{1,2})(?:\/|$|-)/);
     if (fullMatch) {
@@ -337,23 +337,23 @@ export function validateClientNewsFreshnessAndDiscourse(
       const d = Number(fullMatch[3]);
       if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
         const embeddedMs = Date.UTC(y, m - 1, d);
-        if (Number.isFinite(embeddedMs) && Date.now() - embeddedMs > 48 * 3600 * 1000) {
+        if (Number.isFinite(embeddedMs) && Date.now() - embeddedMs > 168 * 3600 * 1000) {
           return { valid: false, reason: 'archival_url' };
         }
       }
     } else if (/\/(20(?:1\d|2[0-5]))\//.test(safeLink)) {
-      // Year-only archival slug (2010–2025): in 2026+ this is always >48h old.
+      // Year-only archival slug (2010–2025): in 2026+ this is always >168h old.
       return { valid: false, reason: 'archival_url' };
     }
   }
 
-  // 2. Timestamp age check: rawPubDate older than 48h.
+  // 2. Timestamp age check: rawPubDate older than 168h.
   let formattedPubDate: string | undefined;
   if (safePub) {
     const parsedMs = Date.parse(safePub);
     if (Number.isFinite(parsedMs) && !Number.isNaN(parsedMs)) {
       const ageMs = Date.now() - parsedMs;
-      if (ageMs > 48 * 3600 * 1000) {
+      if (ageMs > 168 * 3600 * 1000) {
         return { valid: false, reason: 'stale_pubdate' };
       }
       const d = new Date(parsedMs);
@@ -437,7 +437,7 @@ export function validateClientNewsFreshnessAndDiscourse(
 // Backend sends `forecast_tag = 'FORECAST_WASPADA'` + `forecast_valid_until`
 // (ISO) for early-warning articles/zones, and keeps `zone_tier` at
 // YELLOW_CLARIFY. The tag is a 24h display window: once it lapses the tag is
-// hidden, but the article itself is NOT removed — the 48h freshness/discourse
+// hidden, but the article itself is NOT removed — the 168h freshness/discourse
 // admission gate above is a separate concern and stays untouched.
 // ---------------------------------------------------------------------------
 
@@ -782,7 +782,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               const rawPub = publishedAtRaw || 'Terkini';
               const summaryText = a.summary || a.title || '';
               // 24h forecast window; an expired tag is hidden here but the article
-              // still passes the untouched 48h admission gate below.
+              // still passes the untouched 168h admission gate below.
               const forecastValidUntil = forecastTagRaw
                 ? deriveForecastValidUntil(a.forecast_valid_until ?? gtm.forecast_valid_until, publishedAtRaw)
                 : undefined;

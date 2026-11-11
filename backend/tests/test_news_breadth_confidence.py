@@ -4,7 +4,7 @@ SPEC decision 7: the 0.86/0.94 constant is never displayed as confidence;
 unverified reads "Belum terverifikasi".
 SPEC decision 8: measure per-feed yield, kill the silent "Sumatera Utara"
 default, then enforce read-time quotas (max per source + every province with
-qualifying 48h articles appears).
+qualifying 168h articles appears).
 
 Hermetic: Supabase is not touched (`fetch_news_from_supabase` is patched) and
 Redis is only ever best-effort — the yield module answers from process memory
@@ -93,7 +93,7 @@ async def call_live(monkeypatch, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_breadth_contract_caps_one_source_and_keeps_every_province(monkeypatch):
-    """100 Aceh items from one feed + 50 across 4 provinces → all 5, ≤12 each."""
+    """100 Aceh items from one feed + 50 across 4 provinces → all 5, ≤20 each."""
     rows: List[Dict[str, Any]] = []
     for i in range(100):
         rows.append(article(i, source="Tribun Aceh", province="Aceh"))
@@ -112,9 +112,9 @@ async def test_breadth_contract_caps_one_source_and_keeps_every_province(monkeyp
         assert province in meta["provinces_present"], f"{province} missing from the first page"
 
     aceh_count = sum(1 for a in returned if a.get("source") == "Tribun Aceh")
-    assert aceh_count <= 12, "one prolific publisher filled the window"
-    assert meta["source_counts"]["Tribun Aceh"] <= 12
-    assert meta["max_per_source"] == 12
+    assert aceh_count <= 20, "one prolific publisher filled the window"
+    assert meta["source_counts"]["Tribun Aceh"] <= 20
+    assert meta["max_per_source"] == 20
 
     assert sum(meta["province_counts"].values()) == len(returned)
     assert meta["province_counts"]["Aceh"] >= 1

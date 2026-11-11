@@ -262,7 +262,7 @@ TARGETED_PRESS_QUERIES = [
     "(site:bnpb.go.id OR site:bmkg.go.id) (banjir OR longsor OR gempa OR peringatan dini OR cuaca ekstrem) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung OR Aceh OR Jambi) when:2d",
 ]
 
-MAX_NEWS_AGE_HOURS = 48
+MAX_NEWS_AGE_HOURS = 168
 EXTRACTION_SCHEMA_VERSION = 7
 
 # Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner

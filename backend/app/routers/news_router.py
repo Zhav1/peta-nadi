@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["News Intelligence"])
 
 # Phase 172 (M9): read-time breadth contract (SPEC decision 8).
-# The SQL path is untouched — `order("created_at", desc).limit(150)` still picks
+# The SQL path is untouched — `order("created_at", desc).limit(200)` still picks
 # the candidate window; the diversity quota is a Python post-process on that
 # window, so there is no costly rewrite and no extra query.
-MAX_NEWS_PER_SOURCE = 12
-NEWS_READ_BUDGET = 150
+MAX_NEWS_PER_SOURCE = 20
+NEWS_READ_BUDGET = 200
 SUMATRA_PROVINCES = (
     "Aceh",
     "Sumatera Utara",
@@ -824,14 +824,14 @@ async def _get_live_news_inner(
 
     # Query the persisted article rows; the legacy force_refresh parameter only
     # bypasses the in-process cache and has no upstream side effects.
-    # Over-fetch (150) so the 48h / tier / geo filters below have candidates;
+    # Over-fetch (200) so the 168h / tier / geo filters below have candidates;
     # a 60-row window let valid rows get pushed out by dropped ones.
     # `include_regional=True` is DISPLAY-ONLY: it lets the read path classify rows
     # the crisis gate rejected. Every other caller of the service keeps the
     # default (False) and therefore never sees a regional row.
     try:
         articles = await fetch_news_from_supabase(
-            limit=150,
+            limit=200,
             province=province,
             severity=severity,
             include_regional=True,
@@ -913,14 +913,14 @@ async def _get_live_news_inner(
                     if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 7):
                         _row[_k] = _re[_k]
                 _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
-            # Strict 48h freshness gate on read (archival URL or stale pubDate).
+            # Strict 168h freshness gate on read (archival URL or stale pubDate).
             if _router_fresh is not None:
                 try:
                     _fr = _router_fresh(
                         _row.get("original_pub_date") or (isinstance(_gtm, dict) and _gtm.get("original_pub_date")) or _row.get("pubDate") or _row.get("published_at"),
                         _row.get("link"),
                         html_meta_date=_row.get("html_published_at"),
-                        max_age_hours=48,
+                        max_age_hours=168,
                     )
                     if not _fr.get("is_fresh"):
                         continue

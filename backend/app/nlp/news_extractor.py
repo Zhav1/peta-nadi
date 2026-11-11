@@ -905,7 +905,7 @@ def run_agent_verification_gate(
         )
         link = (article.get("link") or article.get("url")) if article else ""
         html_meta = article.get("html_published_at") if article else None
-        fres = _fresh(pub_raw, link, html_meta_date=html_meta, max_age_hours=48)
+        fres = _fresh(pub_raw, link, html_meta_date=html_meta, max_age_hours=168)
         freshness_passed = bool(fres.get("is_fresh"))
         try:
             age_hours = float(fres.get("age_hours")) if fres.get("age_hours") is not None else None
@@ -1282,11 +1282,11 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     art_id = art.get("id") or f"NEWS-{hashlib.md5(f'{title}:{art_link}'.encode()).hexdigest()[:8]}"
     affected_locations = loc_info.get("affected_locations") or []
     if nodes and affected_locations:
-        # Ensure corridor_nodes covers all multi-regency matches.
-        for _al in affected_locations:
-            _nm = _al.get("name")
-            if _nm and _nm not in nodes:
-                nodes.append(_nm)
+        # Single primary zone location: only the top match joins corridor_nodes
+        # (extra mentioned places stay in the article raw text).
+        _nm = affected_locations[0].get("name")
+        if _nm and _nm not in nodes:
+            nodes.append(_nm)
 
     # 10. Agent-decided hazard-specific radius + anisotropic polygon geometry.
     radius_km: float | None = None
@@ -1598,15 +1598,18 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                 _all = _resolve_all(_loc_text, fallback_province=_fallback)
 
                 if _all:
-                    structured["affected_locations"] = _all
-                    # Promote primary to top hit.
+                    # ONE primary zone location per news item (orchestrator
+                    # decision A): extra mentioned places stay in the article
+                    # raw text only.
                     _top = _all[0]
+                    structured["affected_locations"] = [_top]
+                    # Promote primary to top hit.
                     structured["latitude"] = _top.get("latitude", structured.get("latitude"))
                     structured["longitude"] = _top.get("longitude", structured.get("longitude"))
                     structured["province"] = _top.get("province", structured.get("province"))
                     structured["region"] = _top.get("province", structured.get("region", structured.get("province")))
                     structured["corridor_segment"] = _top.get("corridor_segment", structured.get("corridor_segment"))
-                    structured["corridor_nodes"] = [_e.get("name") for _e in _all if _e.get("name")]
+                    structured["corridor_nodes"] = [_top["name"]] if _top.get("name") else []
                     structured["is_geocoded"] = True
                     structured["location_precision"] = _top.get("location_precision", "exact_node")
         except Exception:

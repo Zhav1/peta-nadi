@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
  AlertCircle,
  X,
- Shield,
  User,
  Truck,
  Scale,
@@ -172,21 +171,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <AlertDialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
  <AlertDialogContent className="max-w-xl rounded-xl border-white/10 bg-[#0c1017] p-0 shadow-[0_12px_32px_rgba(0,0,0,0.4)] tabular-nums max-h-[90vh] overflow-hidden flex flex-col">
  {/* Modal Header */}
- <AlertDialogHeader className="flex-row items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
- <div className="flex items-center gap-3">
- <div className="w-8 h-8 rounded-[10px] bg-white/5 flex items-center justify-center text-slate-300">
- <Shield className="w-4 h-4" />
- </div>
- <div>
- <AlertDialogTitle className="text-sm font-semibold text-white">
- {isAuthenticated ? 'Profil' : 'Masuk'}
- </AlertDialogTitle>
- <AlertDialogDescription className="text-xs text-slate-400">
- Akses berbasis peran
- </AlertDialogDescription>
- </div>
- </div>
-
+ <AlertDialogHeader className="flex-row items-center justify-start gap-3 border-b border-white/10 px-6 py-4">
  <button
  type="button"
  id="close-auth-modal-btn"
@@ -197,6 +182,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  >
  <X className="w-4 h-4" />
  </button>
+ <AlertDialogTitle className="text-sm font-semibold text-white">
+ {isAuthenticated ? 'Profil' : 'Masuk'}
+ </AlertDialogTitle>
  </AlertDialogHeader>
 
  {/* Tab Navigation (Only visible when NOT authenticated or logged out) */}
@@ -619,8 +607,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {activeTab === 'password' && (
  <form onSubmit={handlePasswordSubmit} className="space-y-4">
  <div className="space-y-1.5">
- <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
- <Mail className="w-3.5 h-3.5 text-slate-400" />
+ <label className="text-xs font-mono text-slate-300">
  <span>Alamat Email</span>
  </label>
  <input
@@ -634,8 +621,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
- <Lock className="w-3.5 h-3.5 text-slate-400" />
+ <label className="text-xs font-mono text-slate-300">
  <span>Kata Sandi</span>
  </label>
  <input
@@ -713,8 +699,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
 
  <div className="space-y-1.5">
- <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
- <Mail className="w-3.5 h-3.5 text-slate-400" />
+ <label className="text-xs font-mono text-slate-300">
  <span>Alamat Email</span>
  </label>
  <input

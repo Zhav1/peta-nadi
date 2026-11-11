@@ -88,6 +88,14 @@ export function CrisisSidebar({
  ? Math.round(rawConfidence * 100)
  : null;
 
+ // M9 decision 7: disruption probability comes from the calibrated consensus
+ // audit (verification_audit.pred_prob), never a constant; absent → honest null.
+ const rawDisruptionProb = Number(crisis.verification_audit?.pred_prob);
+ const disruptionProbPct =
+ Number.isFinite(rawDisruptionProb) && rawDisruptionProb > 0
+ ? Math.round(rawDisruptionProb * 100)
+ : null;
+
  return (
  <div
  id="crisis-sidebar"
@@ -121,11 +129,6 @@ export function CrisisSidebar({
          ? 'Bahaya'
          : 'Waspada'}
  </span>
- {crisis.is_simulated && (
- <span className="text-xs text-slate-500">
- Simulasi
- </span>
- )}
  </div>
  <h2 className="text-sm font-bold text-white leading-snug font-sans">
  {crisis.title}
@@ -139,6 +142,11 @@ export function CrisisSidebar({
  Radius terdampak aktual: {crisis.radius_km.toFixed(1)} km
  </p>
  )}
+ {/* M9 decision 7: disruption probability from the calibrated consensus audit
+     (verification_audit.pred_prob) — honest "Belum tersedia" when absent. */}
+ <p className="text-xs text-slate-400 font-mono mt-0.5">
+ Probabilitas disrupsi: {disruptionProbPct === null ? 'Belum tersedia' : `${disruptionProbPct}%`}
+ </p>
  {crisis.tier_reason && (
  <div className="mt-2.5 p-2 rounded-lg bg-[#121822] border border-white/10 space-y-1">
    {/* SPEC #4: one line in the header; the full chain stays in the Bukti tab. */}

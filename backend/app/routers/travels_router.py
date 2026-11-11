@@ -23,7 +23,12 @@ from app.schemas.travel import (
     TravelListResponse,
     TravelHedgingRequest,
 )
-from app.auth.supabase_auth import get_optional_user, UserSession, ROLE_DISPATCHER
+from app.auth.supabase_auth import (
+    get_optional_user,
+    UserSession,
+    ROLE_DISPATCHER,
+    is_anonymous_guest,
+)
 from app.services import travel_ledger_service
 from app.services.travel_ledger_service import (
     TruckNotFoundError,
@@ -68,6 +73,16 @@ def _effective_company_filter(user: UserSession, requested: Optional[str]) -> Op
     if role == ROLE_DISPATCHER:
         return user.company_id or None
     return requested
+
+
+# Driver PII (nama + kontak WhatsApp pengemudi) is tenant-operational data.
+# Anonymous visitors get the fleet's macro shape without personal contacts.
+_REDACTED_DRIVER_FIELDS = {"driver_name": None, "driver_phone": None}
+
+
+def _redact_driver_pii(asset: Dict[str, Any]) -> Dict[str, Any]:
+    """Null out driver PII on one truck-asset row for anonymous callers."""
+    return {**asset, **_REDACTED_DRIVER_FIELDS}
 
 
 # ==========================================
@@ -118,14 +133,24 @@ async def create_truck_asset(
 @router.get("/trucks", response_model=List[TruckAssetResponse])
 async def list_truck_assets(
     company_id: Optional[str] = Query(None, description="Filter tenant perusahaan"),
+    user: UserSession = Depends(get_optional_user),
 ):
-    """List master truck assets, including legacy onboarded trucks (backward compat)."""
+    """List master truck assets, including legacy onboarded trucks (backward compat).
+
+    Anonymous callers get the fleet shape without driver PII (nama/kontak
+    pengemudi); authenticated dispatcher/tenant callers keep the full row.
+    """
     items = travel_ledger_service.list_truck_assets_with_legacy(company_id=company_id)
+    if is_anonymous_guest(user):
+        items = [_redact_driver_pii(item) for item in items]
     return [TruckAssetResponse(**item) for item in items]
 
 
 @router.get("/trucks/{truck_id}", response_model=TruckAssetResponse)
-async def get_truck_asset(truck_id: str):
+async def get_truck_asset(
+    truck_id: str,
+    user: UserSession = Depends(get_optional_user),
+):
     """Read one master truck asset (falls back to legacy custom fleet)."""
     asset = travel_ledger_service.resolve_truck_asset(truck_id)
     if not asset:
@@ -133,6 +158,8 @@ async def get_truck_asset(truck_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Aset truk '{truck_id}' tidak ditemukan.",
         )
+    if is_anonymous_guest(user):
+        asset = _redact_driver_pii(asset)
     return TruckAssetResponse(**asset)
 
 

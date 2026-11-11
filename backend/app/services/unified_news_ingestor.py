@@ -40,7 +40,7 @@ NEWS_INGESTOR_TITLE_PREFIX = "[News Alert]"
 # Per-cycle extraction budget. With 23 RSS feeds + 8 targeted queries a flat
 # head-slice starves every feed whose results land late in the gather order, so
 # the budget is spent round-robin across outlets instead.
-NEWS_INGEST_ITEM_BUDGET = 60
+NEWS_INGEST_ITEM_BUDGET = 120
 
 
 def round_robin_by_source(

@@ -44,6 +44,16 @@ export interface VerificationAudit {
   llm_verified?: boolean;
   content_chars_analyzed?: number;
   is_active_disaster?: boolean;
+  /** WS-A stored forecast: calibrated consensus probability (0–1). */
+  pred_prob?: number;
+  /** Raw (uncalibrated) consensus probability (0–1). */
+  raw_prob?: number;
+  /** Theoretical max of the active sensor-weight profile (0–1). */
+  p_max?: number;
+  /** Active sensor-weight profile version (e.g. ECONOMIC_ACTIVE). */
+  weights_version?: string;
+  /** Agent codes that corroborated the consensus (e.g. BMKG_RADAR). */
+  corroborating_agents?: string[];
 }
 
 export interface HazardImpactProfile {
@@ -325,7 +335,8 @@ export interface CrisisState {
   region: string;
   affected_polygon?: number[][];
   status: CrisisStatus;
-  overall_confidence: number;
+  /** Swarm consensus confidence; absent when no agent produced one (UI shows "belum tersedia"). */
+  overall_confidence?: number;
   data_collection_finding?: AgentFinding;
   osint_hazard_finding?: AgentFinding;
   prediction_finding?: AgentFinding;
@@ -351,6 +362,8 @@ export interface CrisisState {
     entity_type?: string;
     relation: string;
     impact_score?: number;
+    /** True only when the LLM actually arbitrated this hop. */
+    llm_used?: boolean;
   }>;
   hazard_polygons?: HazardPolygon[];
   congestion_forecast?: CongestionForecast;
