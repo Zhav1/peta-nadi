@@ -12,6 +12,7 @@ from app.services.hazard_evidence import (
     HAZARD_EVIDENCE_VERSION,
     assess_route_hazards,
     normalize_hazard_evidence,
+    route_intersects_geometry,
 )
 
 _NOW = datetime.now(UTC)
@@ -258,6 +259,64 @@ def test_cpu_router_penalizes_forecast_risk_without_excluding_edge():
     assert result["routes_count"] == 1
     assert result["routes"][0]["hazard_assessment"]["status"] == "PRECAUTIONARY_RISK"
     assert result["routes"][0]["viable"] is False
+
+
+def test_real_precautionary_hazard_yields_viable_avoiding_corridor():
+    """A real (forecast/modeled) hazard must yield a viable avoiding corridor.
+
+    The 3.0x precautionary cost penalty reorders shortest paths: the avoiding
+    route can be emitted at index 0 while the through-hazard route ranks at
+    index >= 1. Safety gating must stay evidence-based, so the avoiding
+    corridor stays viable and the through-hazard corridor is never blessed as
+    SAFE_REROUTE just for being emitted later.
+    """
+    router = CPURoutingAdapter(cache_path="missing-local-test-fixture.json")
+    graph = nx.DiGraph()
+    graph.add_edge("a", "b", distance_km=60.0, base_speed_kmh=50.0, travel_time_min=72.0, weight=72.0)
+    graph.add_edge("a", "c", distance_km=30.0, base_speed_kmh=50.0, travel_time_min=36.0, weight=36.0)
+    graph.add_edge("c", "d", distance_km=40.0, base_speed_kmh=50.0, travel_time_min=48.0, weight=48.0)
+    graph.add_edge("d", "b", distance_km=30.0, base_speed_kmh=50.0, travel_time_min=36.0, weight=36.0)
+    router.graph = graph
+    router.nodes_dict = {
+        "a": {"id": "a", "lat": 3.0, "lon": 98.0, "name": "A"},
+        "b": {"id": "b", "lat": 3.0, "lon": 99.0, "name": "B"},
+        "c": {"id": "c", "lat": 3.6, "lon": 98.4, "name": "C"},
+        "d": {"id": "d", "lat": 3.7, "lon": 98.8, "name": "D"},
+    }
+    forecast = _current_closure(
+        incident_id="forecast-detour-001",
+        type="flood",
+        source="bmkg",
+        is_forecast=True,
+        geometry_provenance="generated",
+    )
+    result = router.solve_shortest_path(
+        "a", "b", hazard_zones=[forecast],
+        hazard_evidence_coverage="complete", include_proof=False,
+    )
+
+    avoiding = [
+        route for route in result["routes"]
+        if not route_intersects_geometry(route["coordinates"], _CROSSING_POLYGON)
+    ]
+    through = [
+        route for route in result["routes"]
+        if route_intersects_geometry(route["coordinates"], _CROSSING_POLYGON)
+    ]
+
+    # Precautionary evidence is never hardened into a fabricated blockage.
+    assert result["hard_excluded_edge_count"] == 0
+    assert avoiding, "an avoiding corridor must be offered"
+    assert all(route["viable"] for route in avoiding)
+    assert all(route["hazard_assessment"]["status"] == "CLEAR" for route in avoiding)
+    assert through, "the through-hazard corridor stays rendered for review"
+    assert all(
+        route["hazard_assessment"]["status"] == "PRECAUTIONARY_RISK"
+        and route["safety_status"] != "SAFE_REROUTE"
+        and route["viable"] is False
+        for route in through
+    )
+    assert result["decision_status"] == "SAFE_ROUTE_AVAILABLE"
 
 
 def test_cpu_router_removes_all_edges_intersecting_verified_closure():

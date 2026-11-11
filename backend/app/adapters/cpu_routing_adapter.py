@@ -1004,13 +1004,20 @@ class CPURoutingAdapter:
                     continue
                 is_clear = assessment["status"] == "CLEAR"
 
-                # Detour routes that avoid confirmed disaster blockages are viable alternatives!
+                # Safety gates are evidence-based, never emission-order-based: a
+                # precautionary penalty reorders shortest paths, so the route
+                # that goes THROUGH a real hazard can be emitted at index >= 1
+                # and the avoiding route at index 0. Order alone must not bless
+                # a "SAFE_REROUTE" or hold the avoiding corridor.
                 if is_clear:
                     safety_status = "SAFE_REROUTE" if is_detour else "CLEAR"
                     viable = True
-                elif is_detour:
-                    safety_status = "SAFE_REROUTE"
-                    viable = True
+                elif assessment["status"] == "PRECAUTIONARY_RISK":
+                    # Crosses a real, current, unconfirmed hazard: recommended
+                    # against (never a confirmed blockage), still selectable
+                    # while coverage is incomplete.
+                    safety_status = "PRECAUTIONARY_RISK"
+                    viable = hazard_evidence_coverage not in ("complete", "verified_complete")
                 elif hazard_evidence_coverage not in ("complete", "verified_complete"):
                     safety_status = "PRECAUTIONARY_RISK"
                     viable = True
@@ -1122,15 +1129,27 @@ class CPURoutingAdapter:
             route["risk_score"] = assessment.get("risk_score")
             route["is_compromised"] = assessment["status"] in {"BLOCKED", "PRECAUTIONARY_RISK"}
             is_detour = bool(route.get("is_detour") or route.get("corridor_type") == "detour")
+            # Mirror the emission loop's evidence-based gates (never emission
+            # order): a precautionary penalty reorders shortest paths, so the
+            # avoiding corridor can be emitted at index 0 while the route
+            # through the real hazard ranks at index >= 1.
             if assessment["status"] == "CLEAR":
                 route["safety_status"] = "SAFE_REROUTE" if is_detour else "CLEAR"
-                route["viable"] = True
-            elif is_detour and assessment["status"] != "BLOCKED":
-                route["safety_status"] = "SAFE_REROUTE"
                 route["viable"] = True
             elif assessment["status"] == "BLOCKED":
                 route["safety_status"] = "COMPROMISED"
                 route["viable"] = False
+            elif assessment["status"] == "PRECAUTIONARY_RISK":
+                # Crosses a real, current, unconfirmed hazard: honest review
+                # label, never SAFE_REROUTE regardless of emission index.
+                # Recommended against, not forced — no fabricated blockage.
+                route["safety_status"] = "PRECAUTIONARY_RISK"
+                route["viable"] = hazard_evidence_coverage not in ("complete", "verified_complete")
+            elif hazard_evidence_coverage not in ("complete", "verified_complete"):
+                # No intersection on this corridor; only coverage is incomplete.
+                # Keep the hazard-avoiding route selectable with a review label.
+                route["safety_status"] = "PRECAUTIONARY_RISK"
+                route["viable"] = True
             else:
                 route["safety_status"] = "HOLD_DELAY"
                 route["viable"] = False
