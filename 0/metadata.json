@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.13.2",
+  "checkpoint_id": "01M758ZV2RFKMKK8BDNS8Y2Z7S",
+  "session_id": "4ccd1725-67dd-4781-a1f5-b1231c82ae41",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-11T12:23:15.1414836Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "backend/tests/test_adapters.py"
+  ],
+  "agent": "Antigravity",
+  "model": "gemini-3.8-flash-tiered",
+  "turn_id": "bb9be7650f8a",
+  "token_usage": {
+    "input_tokens": 264497,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6832790,
+    "output_tokens": 21729,
+    "api_call_count": 103
+  },
+  "session_token_usage": {
+    "input_tokens": 264497,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6832790,
+    "output_tokens": 21729,
+    "api_call_count": 103
+  },
+  "redaction": {
+    "replacements": 4,
+    "layers": {
+      "betterleaks": 1,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 1,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
