@@ -49,6 +49,27 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
+// Stable identities: recharts 3 stores axis/tooltip settings inside its own
+// Redux store and re-dispatches on every identity change. Object/element
+// literals passed inline are recreated on every parent render, which makes the
+// store notify → axis re-render → re-dispatch cycle self-sustaining
+// (React #185 "Maximum update depth exceeded", via recharts' internal
+// react-redux notifyNestedSubs). Keep every object/element prop module-level.
+const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 0 } as const;
+const LAPORAN_CHART_MARGIN = CHART_MARGIN;
+const X_TICK = { fill: '#94a3b8', fontSize: 11 } as const;
+const AXIS_LINE = { stroke: 'rgba(255,255,255,0.1)' } as const;
+const X_AXIS_LINE = AXIS_LINE;
+const Y_TICK = { fill: '#64748b', fontSize: 11 } as const;
+const BAR_CURSOR = { fill: 'rgba(255,255,255,0.04)' } as const;
+const TOOLTIP_CURSOR_BAR = BAR_CURSOR;
+const LINE_CURSOR = { stroke: 'rgba(255,255,255,0.15)' } as const;
+const TOOLTIP_CURSOR_LINE = LINE_CURSOR;
+const LINE_DOT = { r: 2.5, fill: '#10b981' } as const;
+const LINE_ACTIVE_DOT = { r: 4 } as const;
+const ACTIVE_DOT = LINE_ACTIVE_DOT;
+const CHART_TOOLTIP_CONTENT = <ChartTooltip />;
+
 function EmptyOverlay({ message }: { message: string }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -98,17 +119,17 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
         <div className="relative h-64 px-2 py-3">
           {!hasTier && <EmptyOverlay message="Belum ada data tier pada filter ini." />}
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={tierData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <BarChart data={tierData} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-              <XAxis dataKey="tier" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} />
+              <XAxis dataKey="tier" tick={X_TICK} axisLine={AXIS_LINE} tickLine={false} />
               <YAxis
                 tickFormatter={(v: number) => formatJtM(v)}
-                tick={{ fill: '#64748b', fontSize: 11 }}
+                tick={Y_TICK}
                 axisLine={false}
                 tickLine={false}
                 width={56}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Tooltip content={CHART_TOOLTIP_CONTENT} cursor={BAR_CURSOR} />
               <Bar dataKey="Hemat" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={44} />
             </BarChart>
           </ResponsiveContainer>
@@ -127,7 +148,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
         <div className="relative h-64 px-2 py-3">
           {!hasPeriod && <EmptyOverlay message="Belum ada data periode pada filter ini." />}
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={periodData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <ComposedChart data={periodData} margin={CHART_MARGIN}>
               <defs>
                 <linearGradient id="laporanHematFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
@@ -135,17 +156,17 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-              <XAxis dataKey="periode" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} />
+              <XAxis dataKey="periode" tick={X_TICK} axisLine={AXIS_LINE} tickLine={false} />
               <YAxis
                 tickFormatter={(v: number) => formatJtM(v)}
-                tick={{ fill: '#64748b', fontSize: 11 }}
+                tick={Y_TICK}
                 axisLine={false}
                 tickLine={false}
                 width={56}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+              <Tooltip content={CHART_TOOLTIP_CONTENT} cursor={LINE_CURSOR} />
               <Area type="monotone" dataKey="Hemat" name="Hemat" fill="url(#laporanHematFill)" stroke="transparent" />
-              <Line type="monotone" dataKey="Hemat" name="Hemat" stroke="#10b981" strokeWidth={2} dot={{ r: 2.5, fill: '#10b981' }} activeDot={{ r: 4 }} />
+              <Line type="monotone" dataKey="Hemat" name="Hemat" stroke="#10b981" strokeWidth={2} dot={LINE_DOT} activeDot={LINE_ACTIVE_DOT} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
