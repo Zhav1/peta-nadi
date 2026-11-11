@@ -3,7 +3,7 @@
   "checkpoint_id": "01M756ZWNMV2KATDK21GJHFPEY",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 4,
+  "checkpoints_count": 8,
   "files_touched": [
     "frontend/components/dashboard/LaporanCharts.tsx",
     "frontend/components/dashboard/LaporanHybridPanel.tsx"
@@ -32,14 +32,20 @@
       "transcript": "/3/full.jsonl",
       "content_hash": "/3/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/4/metadata.json",
+      "transcript": "/4/full.jsonl",
+      "content_hash": "/4/content_hash.txt",
+      "prompt": "/4/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2532209,
+    "input_tokens": 3045997,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 140952253,
-    "output_tokens": 383035,
-    "api_call_count": 827
+    "cache_read_tokens": 142289517,
+    "output_tokens": 402092,
+    "api_call_count": 850
   },
   "redaction": {
     "replacements": 5,
