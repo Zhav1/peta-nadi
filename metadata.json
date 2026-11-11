@@ -3,15 +3,18 @@
   "checkpoint_id": "01M757167NJQCYZXM14WT4QJJQ",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "backend/app/adapters/bmkg_adapter.py",
     "backend/app/adapters/cpu_routing_adapter.py",
     "backend/app/routers/internal_tick.py",
     "backend/app/routers/routing_router.py",
     "backend/app/services/adm_boundary_service.py",
+    "backend/app/services/hazard_consensus_service.py",
     "backend/app/services/hazard_evidence.py",
-    "backend/app/services/job_scheduler.py"
+    "backend/app/services/job_scheduler.py",
+    "backend/tests/test_hazard_consensus.py",
+    "infra/supabase/migrations/20261111120000_hazards_consensus.sql"
   ],
   "sessions": [
     {
@@ -19,17 +22,23 @@
       "transcript": "/0/full.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "redaction": {
-    "replacements": 3,
+    "replacements": 5,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 3,
+      "credential_value": 4,
       "credentialed_uri": 0,
-      "entropy": 0,
+      "entropy": 1,
       "key_context": 0,
       "provider_token": 0,
       "shell_stdin": 0
