@@ -20,6 +20,7 @@ import {
  ArrowUpRight,
  Sliders
 } from 'lucide-react';
+import { PRODUCTION_API_BASE_URL } from '@/lib/baseUrl';
 
 interface EndpointProbeItem {
  id: string;
@@ -131,7 +132,7 @@ function formatSourceTimestamp(iso: string | null): string {
 }
 
 export default function SystemObservabilitySection() {
- const [targetUrl, setTargetUrl] = useState<string>('https://peta-nadi.onrender.com');
+ const [targetUrl, setTargetUrl] = useState<string>(PRODUCTION_API_BASE_URL);
  const [customUrl, setCustomUrl] = useState<string>('');
  const [isCustom, setIsCustom] = useState<boolean>(false);
  const [endpoints, setEndpoints] = useState<EndpointProbeItem[]>(INITIAL_ENDPOINTS);
@@ -382,10 +383,10 @@ export default function SystemObservabilitySection() {
  <div className="flex items-center rounded-md bg-transparent border-t border-white/5 p-1 text-xs font-mono">
  <button
  type="button"
- onClick={() => { setIsCustom(false); setTargetUrl('https://peta-nadi.onrender.com'); }}
- className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('onrender') ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
+ onClick={() => { setIsCustom(false); setTargetUrl(PRODUCTION_API_BASE_URL); }}
+ className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('nip.io') ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
  >
- Render Cloud
+ VPS (Prod)
  </button>
  <button
  type="button"

@@ -1,17 +1,18 @@
 /**
  * Single source of truth for the backend base URL (browser + server).
  *
- * SPEC: Gazetteer-first, backend is peta-nadi.onrender.com. Every client path
+ * SPEC: Gazetteer-first, backend is api.177-202-246-251.nip.io (Caddy + Let's
+ * Encrypt on the VPS). Every client path
  * (fetch, SSE, WebSocket-derived URLs, proxy) must resolve through here so a
  * stale or malformed NEXT_PUBLIC_API_URL cannot silently break map search,
  * corridor telemetry, or fleet autocomplete again.
  */
 
 /** Canonical production backend. */
-export const PRODUCTION_API_BASE_URL = 'https://peta-nadi.onrender.com';
+export const PRODUCTION_API_BASE_URL = 'https://api.177-202-246-251.nip.io';
 
 /** Hosts that have been decommissioned; pointing at them yields 404/CORS failures. */
-const DEAD_API_HOSTS = ['prehub-backend.onrender.com'];
+const DEAD_API_HOSTS = ['prehub-backend.onrender.com', 'peta-nadi.onrender.com'];
 
 /**
  * Normalizes an env-supplied API base URL.
@@ -19,8 +20,8 @@ const DEAD_API_HOSTS = ['prehub-backend.onrender.com'];
  * Returns null when the value is unusable so callers fall back to a known-good
  * base instead of issuing requests against a broken one. Handles the failures
  * seen in production envs: surrounding whitespace, pasted quotes, a missing
- * scheme (`peta-nadi.onrender.com`), a trailing slash (`https://host/` →
- * `//api/...` → 404), and the dead prehub-backend host.
+ * scheme (`api.177-202-246-251.nip.io`), a trailing slash (`https://host/` →
+ * `//api/...` → 404), and the dead Render hosts (prehub-backend, peta-nadi).
  */
 export function sanitizeBaseUrl(raw?: string | null): string | null {
   if (!raw) return null;

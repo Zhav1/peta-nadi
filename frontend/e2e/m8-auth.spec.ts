@@ -230,7 +230,7 @@ test.describe('M8 phase 161 — auth session durability', () => {
     // The backend must accept the recovered token. Assert directly instead of
     // relying on the app's background reconciliation, which is intentionally
     // optimistic and may still be in flight on a cold backend.
-    const apiBase = process.env.M8_API_BASE_URL ?? 'https://peta-nadi.onrender.com';
+    const apiBase = process.env.M8_API_BASE_URL ?? 'https://api.177-202-246-251.nip.io';
     const meResponse = await page.request.get(`${apiBase}/api/v1/auth/me`, {
       headers: { Authorization: `Bearer ${recovered}` },
       timeout: 120000,
