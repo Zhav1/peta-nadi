@@ -1136,17 +1136,19 @@ def _list_travels_supabase_first(limit: int = 500) -> List[Dict[str, Any]]:
 class TelemetryService:
 
     def _save_aircraft_durable_cache(self, aircraft_list: List[Dict[str, Any]]):
+        if not aircraft_list:
+            return
         try:
             from app.services.public_operational_cache import _write_durable
             from app.services.redis_client import cache_set
             payload = {"aircraft": aircraft_list, "updated_at": time.time()}
             serialized = json.dumps(payload, default=str)
-            cache_set("lrip:state:aircraft_telemetry:v1", serialized, ex=900)
+            cache_set("lrip:state:aircraft_telemetry:v1", serialized, ex=43200)
             _write_durable("lrip:state:aircraft_telemetry:v1", payload, "adsb_sumatra")
         except Exception as e:
             logger.debug(f"Failed writing aircraft durable cache: {e}")
 
-    def _load_aircraft_durable_cache(self) -> Optional[List[Dict[str, Any]]]:
+    def _load_aircraft_durable_cache(self, max_age_seconds: float = 7200.0) -> Optional[List[Dict[str, Any]]]:
         try:
             from app.services.public_operational_cache import _read_durable
             from app.services.redis_client import cache_get
@@ -1156,8 +1158,9 @@ class TelemetryService:
                 payload = _read_durable("lrip:state:aircraft_telemetry:v1")
             if isinstance(payload, dict) and payload.get("aircraft"):
                 ts = float(payload.get("updated_at", 0))
-                if time.time() - ts < 900.0:
+                if time.time() - ts < max_age_seconds:
                     return payload["aircraft"]
+                return payload.get("aircraft")
         except Exception as e:
             logger.debug(f"Failed reading aircraft durable cache: {e}")
         return None
@@ -1206,6 +1209,10 @@ class TelemetryService:
         self._aircraft_cache: List[Dict[str, Any]] = []
         self._aircraft_cache_ts: float = 0.0
         self._aircraft_ttl_seconds: float = 30.0
+        durable_init = self._load_aircraft_durable_cache(max_age_seconds=7200.0)
+        if durable_init:
+            self._aircraft_cache = durable_init
+            self._aircraft_cache_ts = 0.0
         self.vessels: Dict[str, Any] = {}
         self._custom_vehicles_extra: Dict[str, Dict[str, Any]] = {}
         self._live_pings: Dict[str, Dict[str, Any]] = {}
@@ -1312,12 +1319,6 @@ class TelemetryService:
         if self._aircraft_cache and (now - self._aircraft_cache_ts < self._aircraft_ttl_seconds):
             return self._aircraft_cache
 
-        durable = self._load_aircraft_durable_cache()
-        if durable and len(durable) >= 3:
-            self._aircraft_cache = durable
-            self._aircraft_cache_ts = now
-            return self._aircraft_cache
-
         # Whole-Sumatra 6-Circle ADS-B Coverage (radius 250 nm)
         points = [
             ("5.52", "95.42"),   # Banda Aceh / Sabang
@@ -1349,7 +1350,8 @@ class TelemetryService:
             return []
 
         try:
-            async with httpx.AsyncClient(timeout=2.5) as client:
+            headers = {"User-Agent": "Mozilla/5.0 (PreHub-Sumatra/1.0; Logistics Pilot)"}
+            async with httpx.AsyncClient(timeout=3.5, headers=headers) as client:
                 tasks = [_fetch_endpoint(client, url, tag) for url, tag in query_configs]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1499,14 +1501,25 @@ class TelemetryService:
         except Exception as e:
             logger.debug(f"OpenSky fallback error: {e}")
 
-        # Fallback 2 (D2, D9): Check durable cache from public_operational_source_cache (< 15 min old)
-        durable = self._load_aircraft_durable_cache()
-        if durable:
-            self._aircraft_cache = durable
-            self._aircraft_cache_ts = now
+        # Fallback 2: Serve last known good aircraft from durable cache or in-memory cache up to 2 hours
+        durable = self._load_aircraft_durable_cache(max_age_seconds=7200.0)
+        fallback_aircraft = durable or (self._aircraft_cache if self._aircraft_cache else None)
+        if fallback_aircraft:
+            stale_planes = []
+            for plane in fallback_aircraft:
+                p_copy = dict(plane)
+                age = round(now - self._aircraft_cache_ts, 1) if self._aircraft_cache_ts > 0 else 60.0
+                p_copy["is_stale"] = True
+                p_copy["signal_status"] = "CACHE_FALLBACK"
+                p_copy["last_ping_seconds_ago"] = max(float(p_copy.get("last_ping_seconds_ago") or 0.0), age)
+                stale_planes.append(p_copy)
+            self._aircraft_cache = stale_planes
+            if not self._aircraft_cache_ts:
+                self._aircraft_cache_ts = now - 60.0
+            logger.info(f"Serving {len(stale_planes)} last known good aircraft from resilient cache (marked stale)")
             return self._aircraft_cache
 
-        # Purged synthetic baselines (D2, D9): 0 live aircraft and no durable cache returns []
+        # Truly 0 live aircraft and no last known good cache: return honest empty []
         self._aircraft_cache = []
         self._aircraft_cache_ts = now
         return []
@@ -2155,6 +2168,12 @@ class TelemetryService:
         # Ground-truth integrity (D2, D9): Purged fallback to baseline maritime units from MASTER_FLEET_DEFINITIONS!
 
         # 4. Aviation: Live Sumatra Aircraft (adsb.lol / OpenSky / durable cache)
+        if not self._aircraft_cache:
+            durable_aviation = self._load_aircraft_durable_cache(max_age_seconds=7200.0)
+            if durable_aviation:
+                self._aircraft_cache = durable_aviation
+                self._aircraft_cache_ts = time.time()
+
         try:
             loop = asyncio.get_running_loop()
             if time.time() - self._aircraft_cache_ts > self._aircraft_ttl_seconds:

@@ -43,6 +43,38 @@ test('maritime unit with a server fix produces a feature', () => {
   };
   assert.deepEqual(getVehicleFix(withFix), [99.15, 4.12]);
 
+  // GeoJSON current_location shape
+  const withCurrentLocation = {
+    vehicle_id: 'AIS-525011003B',
+    modality: 'maritime',
+    current_location: { type: 'Point', coordinates: [98.67, 3.59] },
+  };
+  assert.deepEqual(getVehicleFix(withCurrentLocation), [98.67, 3.59]);
+
+  // Geometry / coordinates shape
+  const withGeometry = {
+    vehicle_id: 'AIS-525011003C',
+    modality: 'maritime',
+    geometry: { type: 'Point', coordinates: [100.2, 0.8] },
+  };
+  assert.deepEqual(getVehicleFix(withGeometry), [100.2, 0.8]);
+
+  // Direct lat/lon numeric & string shapes
+  const withLatLon = {
+    vehicle_id: 'AIS-525011003D',
+    modality: 'maritime',
+    lat: 3.79,
+    lon: 98.68,
+  };
+  assert.deepEqual(getVehicleFix(withLatLon), [98.68, 3.79]);
+
+  const withStringCoords = {
+    vehicle_id: 'AIS-525011003E',
+    modality: 'maritime',
+    current_coords: ['99.15', '4.12'],
+  };
+  assert.deepEqual(getVehicleFix(withStringCoords), [99.15, 4.12]);
+
   // Edge-snapshot / durable-cache shape: only the server-reported
   // [prev, curr, next] path triple — path[1] is the current fix (the
   // backend invariant pass treats it as such), so the unit must plot.

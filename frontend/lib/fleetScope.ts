@@ -14,8 +14,10 @@ function isFiniteCoordinate(value: unknown): value is number {
 function asLonLat(value: unknown): [number, number] | null {
   if (!Array.isArray(value) || value.length < 2) return null;
   const [lon, lat] = value;
-  if (!isFiniteCoordinate(lon) || !isFiniteCoordinate(lat)) return null;
-  return [lon, lat];
+  const numLon = typeof lon === 'number' ? lon : typeof lon === 'string' ? parseFloat(lon) : NaN;
+  const numLat = typeof lat === 'number' ? lat : typeof lat === 'string' ? parseFloat(lat) : NaN;
+  if (!isFiniteCoordinate(numLon) || !isFiniteCoordinate(numLat)) return null;
+  return [numLon, numLat];
 }
 
 /**
@@ -46,12 +48,24 @@ export function getVehicleFix(vehicle: FleetVehicle): [number, number] | null {
   );
   if (locationCoords) return locationCoords;
 
-  // Fallback extraction for lat and lon (or latitude / longitude)
+  // Direct geometry.coordinates
+  const geometryCoords = asLonLat(
+    (vehicle as { geometry?: { coordinates?: unknown } }).geometry?.coordinates,
+  );
+  if (geometryCoords) return geometryCoords;
+
+  // Direct coordinates array
+  const directCoords = asLonLat((vehicle as { coordinates?: unknown }).coordinates);
+  if (directCoords) return directCoords;
+
+  // Fallback extraction for lat and lon (or latitude / longitude / lng)
   const vAny = vehicle as any;
-  const lon = vAny.lon ?? vAny.longitude;
-  const lat = vAny.lat ?? vAny.latitude;
-  if (typeof lon === 'number' && typeof lat === 'number' && Number.isFinite(lon) && Number.isFinite(lat)) {
-    return [lon, lat];
+  const rawLon = vAny.lon ?? vAny.longitude ?? vAny.lng;
+  const rawLat = vAny.lat ?? vAny.latitude;
+  const numLon = typeof rawLon === 'number' ? rawLon : typeof rawLon === 'string' ? parseFloat(rawLon) : NaN;
+  const numLat = typeof rawLat === 'number' ? rawLat : typeof rawLat === 'string' ? parseFloat(rawLat) : NaN;
+  if (Number.isFinite(numLon) && Number.isFinite(numLat)) {
+    return [numLon, numLat];
   }
 
   // Server-reported [prev, curr, next] path triple with no flat position

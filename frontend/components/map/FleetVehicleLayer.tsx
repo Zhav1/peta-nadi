@@ -116,6 +116,9 @@ export function FleetVehicleLayer({
 
   const [hoveredVehicle, setHoveredVehicle] = useState<HoveredVehicleInfo | null>(null);
   const [isFollowCamActive, setIsFollowCamActive] = useState(false);
+  const [devCounts, setDevCounts] = useState<{ features: number; input: number }>({ features: 0, input: 0 });
+  const lastDevCountSyncRef = useRef<number>(0);
+  const lastZOrderCheckRef = useRef<number>(0);
 
   const vehiclesRef = useRef<FleetVehicle[]>(vehicles);
   vehiclesRef.current = vehicles;
@@ -274,6 +277,19 @@ export function FleetVehicleLayer({
     }
   }, [selectedVehicleId, vehicles, map, handleVehicleSelect]);
 
+  // Elevate fleet layers above weather polygons and hazard fills so dots never get buried
+  const elevateFleetLayers = useCallback(() => {
+    if (!map || !map.isStyleLoaded()) return;
+    try {
+      const fleetLayerIds = ['fleet-selected-route-line', 'fleet-vehicle-selected-halo', 'fleet-vehicle-dots'];
+      for (const id of fleetLayerIds) {
+        if (map.getLayer(id)) {
+          map.moveLayer(id);
+        }
+      }
+    } catch {}
+  }, [map]);
+
   // Register Native Mapbox WebGL sources and layers safely
   const setupSourcesAndLayers = useCallback(() => {
     if (!map || !map.isStyleLoaded()) return;
@@ -358,18 +374,17 @@ export function FleetVehicleLayer({
           paint: FLEET_DOTS_PAINT as unknown as mapboxgl.CircleLayerSpecification['paint'],
         });
       }
+
+      // Ensure dots and selected lines sit strictly above weather/hazard fills
+      elevateFleetLayers();
     } catch (err) {
       console.error('Failed to setup Mapbox fleet sources and layers:', err);
     }
-  }, [map]);
+  }, [map, elevateFleetLayers]);
 
   // Setup layer lifecycle and mouse interactions (stable across renders)
   useEffect(() => {
     if (!map) return;
-
-    setupSourcesAndLayers();
-    map.on('load', setupSourcesAndLayers);
-    map.on('style.load', setupSourcesAndLayers);
 
     const onMouseEnter = (e: mapboxgl.MapLayerMouseEvent) => {
       map.getCanvas().style.cursor = 'pointer';
@@ -418,18 +433,43 @@ export function FleetVehicleLayer({
       }
     };
 
-    map.on('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
-    map.on('mousemove', 'fleet-vehicle-dots', onMouseMove);
-    map.on('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
-    map.on('click', 'fleet-vehicle-dots', onClick);
+    const bindLayerEvents = () => {
+      if (!map || !map.getLayer('fleet-vehicle-dots')) return;
+      try {
+        map.off('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
+        map.off('mousemove', 'fleet-vehicle-dots', onMouseMove);
+        map.off('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
+        map.off('click', 'fleet-vehicle-dots', onClick);
+
+        map.on('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
+        map.on('mousemove', 'fleet-vehicle-dots', onMouseMove);
+        map.on('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
+        map.on('click', 'fleet-vehicle-dots', onClick);
+      } catch {}
+    };
+
+    const handleStyleOrMapLoad = () => {
+      setupSourcesAndLayers();
+      elevateFleetLayers();
+      bindLayerEvents();
+    };
+
+    setupSourcesAndLayers();
+    elevateFleetLayers();
+    bindLayerEvents();
+
+    map.on('load', handleStyleOrMapLoad);
+    map.on('style.load', handleStyleOrMapLoad);
 
     return () => {
-      map.off('load', setupSourcesAndLayers);
-      map.off('style.load', setupSourcesAndLayers);
-      map.off('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
-      map.off('mousemove', 'fleet-vehicle-dots', onMouseMove);
-      map.off('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
-      map.off('click', 'fleet-vehicle-dots', onClick);
+      map.off('load', handleStyleOrMapLoad);
+      map.off('style.load', handleStyleOrMapLoad);
+      try {
+        map.off('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
+        map.off('mousemove', 'fleet-vehicle-dots', onMouseMove);
+        map.off('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
+        map.off('click', 'fleet-vehicle-dots', onClick);
+      } catch {}
 
       try {
         if (map.getLayer('fleet-vehicle-dots')) map.removeLayer('fleet-vehicle-dots');
@@ -439,7 +479,7 @@ export function FleetVehicleLayer({
         if (map.getSource('fleet-selected-route-source')) map.removeSource('fleet-selected-route-source');
       } catch {}
     };
-  }, [map, setupSourcesAndLayers]);
+  }, [map, setupSourcesAndLayers, elevateFleetLayers]);
 
   // 60 FPS Kinematics interpolation and in-place GeoJSON buffer update loop
   useEffect(() => {
@@ -464,6 +504,15 @@ export function FleetVehicleLayer({
           animRef.current = requestAnimationFrame(animate);
           return;
         }
+      }
+
+      // Elevate fleet layers periodically so newly injected weather polygons never bury vehicle dots
+      if (now - lastZOrderCheckRef.current >= 1500) {
+        lastZOrderCheckRef.current = now;
+        if (!map.getLayer('fleet-vehicle-dots')) {
+          setupSourcesAndLayers();
+        }
+        elevateFleetLayers();
       }
 
       const elapsedMs = now - lastTimeRef.current;
@@ -581,19 +630,27 @@ export function FleetVehicleLayer({
         } else {
           const isAir = v.modality === 'air' || (v as any).type === 'plane' || (v as any).vehicle_type === 'AIR_CARGO';
           const hasSurveyedCorridor = coords.length >= 2 && (calculatePathDistanceKm(coords) >= 15 || isAir);
-          const isScheduledAirCorridor =
-            v.telemetry_source === 'SUMATRA_AIR_CORRIDOR' ||
-            v.vehicle_id?.startsWith('AIR-00') ||
-            Boolean((v as any).id?.startsWith('AIR-00'));
           const hasFreshServerFix = Boolean(
             serverFix && (
               v.telemetry_source === 'ADSB_LIVE' ||
+              v.telemetry_source === 'ADSB_LOL' ||
+              v.telemetry_source === 'ADSB_FI' ||
+              v.telemetry_source === 'AIRPLANES_LIVE' ||
               v.signal_status === 'ADSB_LIVE' ||
-              v.telemetry_source === 'OPENSKY_NETWORK'
+              v.telemetry_source === 'OPENSKY_NETWORK' ||
+              v.tracking_mode === 'LIVE_GPS'
+            )
+          );
+          const hasFreshMaritimeFix = Boolean(
+            serverFix && (
+              v.telemetry_source === 'AIS_LIVE' ||
+              v.signal_status === 'AIS_LIVE' ||
+              v.telemetry_source === 'AISSTREAM_WS' ||
+              v.tracking_mode === 'LIVE_GPS'
             )
           );
 
-          if ((v.modality === 'maritime' || isAir) && hasSurveyedCorridor && !hasFreshServerFix) {
+          if ((v.modality === 'maritime' || isAir) && hasSurveyedCorridor && !hasFreshServerFix && !hasFreshMaritimeFix) {
             const baseSpeed = isAir
               ? ((v.ground_speed_kts ? v.ground_speed_kts * 1.852 : v.speed_kmh) || 450)
               : ((v.sog_knots ? v.sog_knots * 1.852 : v.speed_kmh) || 22);
@@ -716,6 +773,15 @@ export function FleetVehicleLayer({
         features,
       });
 
+      // Synchronize dev-visible diagnostic counts (throttled to 1s)
+      if (now - lastDevCountSyncRef.current >= 1000) {
+        lastDevCountSyncRef.current = now;
+        setDevCounts((prev) => {
+          if (prev.features === features.length && prev.input === visibleVehicles.length) return prev;
+          return { features: features.length, input: visibleVehicles.length };
+        });
+      }
+
       // Deduplicated route line update: only tessellate when selected route changes
       const routeKey = activeSelectedCoords
         ? `${selectedVehicleIdRef.current}_${activeSelectedCoords.length}_${activeSelectedCoords[0][0]}_${activeSelectedCoords[activeSelectedCoords.length - 1][0]}`
@@ -755,7 +821,7 @@ export function FleetVehicleLayer({
         animRef.current = null;
       }
     };
-  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, hideEstimatedRoutes, setupSourcesAndLayers]);
+  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, hideEstimatedRoutes, setupSourcesAndLayers, elevateFleetLayers]);
 
   const vehicle = selectedVehicle?.vehicle;
   const isMaritime = vehicle?.modality === 'maritime';
@@ -1008,6 +1074,23 @@ export function FleetVehicleLayer({
           </div>
         </div>
       )}
+
+      {/* Dev-visible feature vs input count (telemetry diagnostic) */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div
+          data-testid="dev-fleet-feature-count"
+          className="fixed bottom-3 right-3 z-40 bg-[#0c1017]/90 border border-white/10 px-2 py-1 rounded text-[10px] font-mono text-[rgba(232,234,237,0.7)] pointer-events-none select-none"
+        >
+          Fleet: {devCounts.features}/{devCounts.input} features
+        </div>
+      )}
+      <div
+        data-testid="fleet-features-count"
+        className="sr-only"
+        aria-hidden="true"
+      >
+        {`${devCounts.features}/${devCounts.input}`}
+      </div>
     </>
   );
 }

@@ -342,6 +342,9 @@ export function useFleetVehicles(
     const liveSources = [
       'AIS_LIVE',
       'ADSB_LIVE',
+      'ADSB_LOL',
+      'ADSB_FI',
+      'AIRPLANES_LIVE',
       'OPENSKY_NETWORK',
       'PELINDO_SUMATRA_RADAR',
       'LIVE_GPS',
@@ -374,17 +377,16 @@ export function useFleetVehicles(
 
   // Situational vessels: maritime/air from the backend macro feed that do not
   // belong to this tenant (is_tenant_asset === false). Trucks are excluded by
-  // construction — no cross-tenant live GPS leak. No claim => honest empty
-  // (never backfill vessels for a claim-less session).
-  const situationalVessels: FleetVehicle[] =
-    isDispatcher && effectiveCompanyId
-      ? rawVehicles.filter(
-          (v) =>
-            (v.modality === 'maritime' || v.modality === 'air') &&
-            (v as any).is_tenant_asset !== true &&
-            !tenantVehicles.some((t) => t.vehicle_id === v.vehicle_id)
-        )
-      : [];
+  // construction — no cross-tenant live GPS leak. Public situational vessels
+  // show on the map regardless of company_id.
+  const situationalVessels: FleetVehicle[] = isDispatcher
+    ? rawVehicles.filter(
+        (v) =>
+          (v.modality === 'maritime' || v.modality === 'air') &&
+          (v as any).is_tenant_asset !== true &&
+          !tenantVehicles.some((t) => t.vehicle_id === v.vehicle_id)
+      )
+    : [];
 
   // Honest vessel fallback: never synthesize fake fallback vessels or aircraft in client hook
   const fallbackVessels: FleetVehicle[] = [];

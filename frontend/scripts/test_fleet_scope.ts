@@ -75,9 +75,6 @@ const fleet: FleetVehicle[] = [
 function viewForRole(role: Role, companyId?: string | null) {
   if (role === 'DISPATCHER') {
     const { all, live, projected } = scopeDispatcherFleet(fleet, companyId);
-    if (!companyId) {
-      return { tenantAll: all, mapFleet: [], roster: all, projected, situational: [] };
-    }
     const situational = fleet.filter(
       (v) =>
         (v.modality === 'maritime' || v.modality === 'air') &&
@@ -131,7 +128,7 @@ console.log('Role matrix: DISPATCHER without company_id claim');
 {
   const v = viewForRole('DISPATCHER', null);
   check('honest empty tenant view', v.tenantAll.length === 0, v.tenantAll);
-  check('honest empty map', v.mapFleet.length === 0, v.mapFleet);
+  check('map preserves public situational vessels without claim', v.mapFleet.length === 1 && v.mapFleet[0].vehicle_id === 'AIS-MACRO-01', v.mapFleet);
   check('honest empty roster', v.roster.length === 0, v.roster);
 }
 
