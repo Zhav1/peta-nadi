@@ -278,9 +278,13 @@ export function TenantFleetRoster({
                 <p className="text-xs text-slate-400 truncate" title={companyId ?? undefined}>
                   {companyId ? `Perusahaan ${companyId}` : 'Sesi tanpa klaim perusahaan'}
                 </p>
-                {isTenantScoped && (
+                {isTenantScoped ? (
                   <p className="text-xs text-slate-300 mt-1" data-testid="armada-counts">
                     {scopedVehicles.length} unit · {liveCount} live GPS
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 mt-1" data-testid="armada-counts">
+                    Armada Perusahaan: 0 Unit (Mode Evaluasi)
                   </p>
                 )}
                 {isTenantScoped && unknownLocationCount > 0 && (
@@ -309,21 +313,29 @@ export function TenantFleetRoster({
             )}
 
             {!isLoading && !isTenantScoped && (
-              <div className="px-4 py-4 text-xs text-slate-300 flex items-start gap-2" data-testid="armada-tenant-claim-notice">
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-300" />
-                <span>
-                  Sesi Dispatcher tidak memiliki klaim <code className="font-mono">company_id</code>. Armada
-                  tidak dapat ditampilkan sampai perusahaan Anda ditetapkan.
-                </span>
+              <div className="px-4 py-4 space-y-2 text-xs" data-testid="armada-tenant-claim-notice">
+                <div className="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-100">
+                    Armada Perusahaan: 0 Unit. Masuk sebagai Dispatcher berlisensi untuk mendaftarkan dan memantau armada privat Anda.
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Sesi evaluasi publik/tamu beroperasi dalam mode baca Sumatra Live. Untuk mendaftarkan armada privat perusahaan, silakan masuk dengan akun Dispatcher terverifikasi.
+                  </p>
+                </div>
               </div>
             )}
 
             {!isLoading && isTenantScoped && scopedVehicles.length === 0 && (
-              <div className="px-4 py-4 space-y-2">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Belum ada armada terdaftar untuk perusahaan{' '}
-                  <span className="font-mono text-slate-200">{companyId}</span>.
-                </p>
+              <div className="px-4 py-4 space-y-3" data-testid="armada-empty-state">
+                <div className="p-3 rounded-lg bg-white/[0.03] border border-white/10 space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-100">
+                    Armada Perusahaan: 0 Unit. Masuk sebagai Dispatcher berlisensi untuk mendaftarkan dan memantau armada privat Anda.
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Belum ada armada terdaftar untuk perusahaan{' '}
+                    <span className="font-mono text-slate-200">{companyId}</span>.
+                  </p>
+                </div>
                 {error && <p className="text-xs text-slate-400">{error}</p>}
                 <button
                   type="button"

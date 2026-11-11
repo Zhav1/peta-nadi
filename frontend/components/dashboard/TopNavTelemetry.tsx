@@ -273,6 +273,18 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       : d.toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
   };
 
+  const cuacaTooltipWhat =
+    cuacaCount === 0 || cuacaStatus === 'empty'
+      ? 'Gangguan Ekstrem: 0 (Aman - Tidak ada bencana banjir/badai aktif)'
+      : cuacaCount != null && cuacaCount > 0
+        ? `Gangguan Ekstrem: ${cuacaCount} Zona Aktif (Banjir/Cuaca Ekstrem)`
+        : 'Cuaca: zona gangguan aktif (high/critical)';
+
+  const waspadaTooltipWhat =
+    waspadaCount != null
+      ? `Peringatan Dini Cuaca BMKG: ${waspadaCount} Wilayah`
+      : 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF';
+
   const bucketTooltip = (
     bucket: HazardCounterBucket | null | undefined,
     what: string,
@@ -309,8 +321,15 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         ? 'Cache data terakhir (last-known-good)'
         : 'NASA FIRMS CSV publik (keyless)';
   const fireTooltipText = (() => {
+    const fireTitleHeader =
+      titikPanasCount === 0 || fireStatus === 'empty'
+        ? 'Satelit NASA FIRMS: 0 Kebakaran (Terverifikasi Bersih)'
+        : titikPanasCount != null && titikPanasCount > 0
+          ? `Satelit NASA FIRMS: ${titikPanasCount} Titik Api Terdeteksi`
+          : 'Titik Panas (Satelit): titik panas aktif seluruh Sumatra';
+
     const lines = [
-      'Titik Panas (Satelit): titik panas aktif seluruh Sumatra',
+      fireTitleHeader,
       `Area: Sumatra ${bboxLabel}`,
       `Jendela: ${fireWindowHours ?? 24} jam`,
       `Sumber: ${fireSourceLabel}`,
@@ -350,7 +369,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             data-testid="counter-pill"
             onClick={onToggleWeatherPolygons}
             className={pillClass(showWeatherPolygons, true)}
-            title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
+            title={bucketTooltip(weatherSummary?.cuaca, cuacaTooltipWhat, {
               updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
               capNotice:
                 weatherPolygonMeta?.capped
@@ -379,7 +398,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             data-testid="counter-pill"
             onClick={onToggleWeatherAdvisory}
             className={pillClass(showWeatherAdvisory, true)}
-            title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
+            title={bucketTooltip(weatherSummary?.waspada, waspadaTooltipWhat, {
               updatedAt: weatherSummary?.generated_at ?? null,
             })}
           >
