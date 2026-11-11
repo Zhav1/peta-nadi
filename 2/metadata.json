@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.13.2",
+  "checkpoint_id": "01M7571T72KD26QYHTA6XR1T1R",
+  "session_id": "adab3088-875c-4ea7-89da-242a22585bed",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-11T11:49:22.7317956Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "backend/app/routers/news_router.py",
+    "backend/tests/test_news_ordering.py",
+    "frontend/components/dashboard/DashboardClient.tsx",
+    "frontend/components/dashboard/ERPSavingsPanel.tsx",
+    "frontend/components/map/CrisisMap.tsx",
+    "frontend/components/sidebar/CrisisSidebar.tsx",
+    "frontend/components/sidebar/MitigationTab.tsx",
+    "frontend/components/sidebar/RouteDetailModal.tsx",
+    "frontend/hooks/useDashboardCachedResource.ts",
+    "frontend/hooks/useHazardConsensus.ts",
+    "frontend/hooks/useNewsVerification.ts",
+    "frontend/lib/aiDynamicRouter.ts",
+    "frontend/lib/api.ts",
+    "frontend/lib/mapDataPaint.ts",
+    "frontend/lib/polygonGeom.ts",
+    "frontend/lib/types.ts",
+    "frontend/scripts/test_hazard_consensus_geometry.ts"
+  ],
+  "agent": "Antigravity",
+  "model": "gemini-3.8-flash-tiered",
+  "turn_id": "39042591b5a7",
+  "session_token_usage": {
+    "input_tokens": 786143,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 57566278,
+    "output_tokens": 105959,
+    "api_call_count": 288
+  },
+  "redaction": {
+    "replacements": 3,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 0,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 1
+  }
+}

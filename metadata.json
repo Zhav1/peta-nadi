@@ -3,11 +3,25 @@
   "checkpoint_id": "01M7571T72KD26QYHTA6XR1T1R",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
+    "backend/app/routers/news_router.py",
+    "backend/tests/test_news_ordering.py",
+    "frontend/components/dashboard/DashboardClient.tsx",
     "frontend/components/dashboard/ERPSavingsPanel.tsx",
+    "frontend/components/map/CrisisMap.tsx",
+    "frontend/components/sidebar/CrisisSidebar.tsx",
+    "frontend/components/sidebar/MitigationTab.tsx",
+    "frontend/components/sidebar/RouteDetailModal.tsx",
     "frontend/hooks/useDashboardCachedResource.ts",
-    "frontend/lib/mapDataPaint.ts"
+    "frontend/hooks/useHazardConsensus.ts",
+    "frontend/hooks/useNewsVerification.ts",
+    "frontend/lib/aiDynamicRouter.ts",
+    "frontend/lib/api.ts",
+    "frontend/lib/mapDataPaint.ts",
+    "frontend/lib/polygonGeom.ts",
+    "frontend/lib/types.ts",
+    "frontend/scripts/test_hazard_consensus_geometry.ts"
   ],
   "sessions": [
     {
@@ -21,15 +35,21 @@
       "transcript": "/1/full.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "redaction": {
-    "replacements": 0,
+    "replacements": 3,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 0,
+      "credential_value": 3,
       "credentialed_uri": 0,
       "entropy": 0,
       "key_context": 0,
