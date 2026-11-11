@@ -484,3 +484,96 @@ async def test_api_hazards_consensus_and_check_route_endpoints():
     assert "hazards" in check_data
     assert "risk_level" in check_data
     assert "estimated_extra_delay_minutes" in check_data
+
+
+# ---------------------------------------------------------------------------
+# 7. SPEC #6 / #2-backend regressions: CAP province advisory + display titles
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_bmkg_cap_province_with_geometry_becomes_advisory_area(sample_now):
+    """SPEC #6: a bmkg_cap signal naming a province routes to the advisory path
+    even when it carries affected_area geometry, emitting the real province
+    polygon (geometry_role='advisory_area') instead of a nowcast footprint."""
+    cap_polygon = {
+        "type": "Polygon",
+        "coordinates": [[[102.0, -3.2], [102.6, -3.2], [102.6, -2.8], [102.0, -2.8], [102.0, -3.2]]],
+    }
+    signals = [
+        {
+            "id": "cap-1",
+            "source": "bmkg_cap",
+            "event": "weather_warning",
+            "hazard_type": "weather_warning",
+            "province": "Sumatera Selatan",
+            "title": "Waspada Hujan Deras Sumsel",
+            "effective": "2026-11-11T10:00:00+00:00",
+            "expires": "2026-11-11T16:00:00+00:00",
+            "geometry_role": "forecast_warning_area",
+            "affected_area": cap_polygon,
+        }
+    ]
+
+    records = await compute_hazard_consensus(signals=signals, now=sample_now)
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["tier"] == "ADVISORY"
+    assert rec["geometry_role"] == "advisory_area"
+    assert rec["geometry"] is not None
+    assert rec["geometry"]["type"] in ("Polygon", "MultiPolygon")
+    assert rec["title"] == "Cuaca · Sumatera Selatan"
+    assert "Waspada Hujan Deras Sumsel" in (rec.get("raw_title") or "")
+
+
+def test_display_title_sanitizes_machine_patterns():
+    """SPEC #2-backend: short Indonesian titles; machine patterns stripped."""
+    from app.services.hazard_consensus_service import _display_title
+
+    assert _display_title("flood", "Medan") == "Banjir · Medan"
+    assert _display_title("landslide", "Sitinjau Lauik") == "Longsor · Sitinjau Lauik"
+    assert _display_title("fire", "") == "Kebakaran · Sumatera"
+    # Quake: magnitude + nearest place extracted from the BMKG wilayah sentence.
+    assert _display_title(
+        "earthquake",
+        "",
+        raw_title="M4.9 Earthquake - Pusat gempa berada di darat 15 km barat daya Padang Panjang, Sumbar",
+        magnitude=4.9,
+    ) == "Gempa M4.9 · Padang Panjang"
+    # Machine patterns stripped from title-derived areas.
+    assert _display_title("weather", "", raw_title="Weather Alert (rain)") == "Cuaca · Sumatera"
+    assert _display_title("flood", "", raw_title="Flood Corridor Alert - Tebing Tinggi") == "Banjir · Tebing Tinggi"
+    assert _display_title("flood", "Medan", raw_title="Flood (CRITICAL - 8km Radius)") == "Banjir · Medan"
+    assert _display_title("traffic", "JL. Jalinsum KM 50") == "Kemacetan · JL. Jalinsum"
+    # Simulation prefix + raw title never mutated.
+    assert _display_title("flood", "Medan", raw_title="[Simulasi] Flood Belawan", source="simulation") == "Simulasi: Banjir · Medan"
+
+
+@pytest.mark.asyncio
+async def test_advisory_without_boundary_keeps_honest_point_fallback(sample_now):
+    """SPEC #6: no official boundary -> point at the signal's own location with
+    an honest note; never an invented administrative shape."""
+    signals = [
+        {
+            "source": "bmkg_cap",
+            "event": "weather_warning",
+            "province": "Sumatera Selatan",
+            "lat": -2.9,
+            "lon": 104.7,
+            "title": "Waspada Hujan Deras Sumsel",
+            "ts": sample_now.isoformat(),
+        }
+    ]
+
+    with patch(
+        "app.services.hazard_consensus_service.get_advisory_boundary_for_area",
+        return_value=None,
+    ):
+        records = await compute_hazard_consensus(signals=signals, now=sample_now)
+
+    assert len(records) == 1
+    rec = records[0]
+    assert rec["tier"] == "ADVISORY"
+    assert rec["geometry_role"] == "buffer_footprint"
+    assert rec["center"] == {"lat": -2.9, "lon": 104.7}
+    assert "titik indikatif" in rec["reason"]
+    assert "belum tersedia" in rec["reason"]

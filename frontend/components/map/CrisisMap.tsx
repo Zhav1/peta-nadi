@@ -17,6 +17,7 @@ import {
 } from '@/lib/mapboxRoutingService';
 import { formatNodeDisplay, prettyNodeSlug } from '@/lib/formatNode';
 import { toLonLatRing } from '@/lib/polygonGeom';
+import { normalizeSourceLabel, normalizeSourceList } from '@/hooks/useNewsVerification';
 import {
   defaultSpatialHashArbiter,
   arbitrateVisibleLabels,
@@ -214,6 +215,29 @@ function searchResultBadge(item: SearchItem): string {
   if (type === 'regency' || type === 'regency_hub' || type === 'county' || type === 'town') return 'Kota/Kab';
   if (type === 'administrative' || type === 'state' || type === 'province') return 'Wilayah';
   return 'Titik';
+}
+
+/**
+ * SPEC #1 (unified zone+dot): polygon centroid of a zone's ring (vertex
+ * average, closing vertex excluded) — the fallback center dot position when
+ * the zone carries no explicit center.
+ */
+function disasterZoneCentroid(z: DisasterZone): [number, number] | null {
+  const ring = toLonLatRing((z as any).polygon);
+  if (!ring || ring.length < 3) return null;
+  const closed =
+    ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1];
+  const verts = closed ? ring.slice(0, ring.length - 1) : ring;
+  if (verts.length === 0) return null;
+  let sumLon = 0;
+  let sumLat = 0;
+  for (const v of verts) {
+    sumLon += v[0];
+    sumLat += v[1];
+  }
+  return [sumLon / verts.length, sumLat / verts.length];
 }
 
 function createGeoJsonCircleRing(center: [number, number], radiusKm: number, points = 64): [number, number][] {
@@ -2633,12 +2657,25 @@ export default function CrisisMap({
       for (const z of disasterZones) {
         const ring = toLonLatRing(z.polygon);
         if (!ring) continue;
-        const centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon ?? null);
-        const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat ?? null);
+        let centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon ?? null);
+        let centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat ?? null);
+        // SPEC #1 (unified zone+dot): a zone without an explicit center falls
+        // back to its polygon centroid, so the click→sidebar path always has a
+        // camera target for the zone.
+        if (centerLon == null || centerLat == null) {
+          const centroid = disasterZoneCentroid(z);
+          if (centroid) {
+            centerLon = centroid[0];
+            centerLat = centroid[1];
+          }
+        }
         const sourceCount = Number((z as any).source_count ?? (Array.isArray((z as any).sources) ? (z as any).sources.length : ((z as any).source ? 1 : 1)));
         const tier = (z as any).tier || (sourceCount >= 2 ? 'CONFIRMED' : 'WATCH');
         const geometryRole = (z as any).geometry_role || (tier === 'ADVISORY' ? 'advisory_area' : 'buffer_footprint');
-        const sourcesLabel = Array.isArray((z as any).sources) ? (z as any).sources.join(', ') : ((z as any).source || (z as any).source_name || 'sensor');
+        const srcLabels = Array.isArray((z as any).sources)
+          ? normalizeSourceList((z as any).sources)
+          : normalizeSourceList((z as any).source || (z as any).source_name);
+        const sourcesLabel = srcLabels.length > 0 ? srcLabels.join(', ') : 'Multi-sumber';
         const confidence = (z as any).confidence != null ? Number((z as any).confidence) : (tier === 'CONFIRMED' ? 0.9 : 0.65);
 
         zoneFeatures.push({
@@ -2663,8 +2700,8 @@ export default function CrisisMap({
             tier_reason: (z as any).tier_reason || (z as any).reason || '',
             custom_hazard_label: (z as any).custom_hazard_label || '',
             source_news_id: (z as any).source_news_id || '',
-            source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
-            source_name: (z as any).source_name || (z as any).source || 'BMKG CAP / GloFAS / GDACS',
+            source: normalizeSourceLabel((z as any).source || (z as any).source_name),
+            source_name: normalizeSourceLabel((z as any).source_name || (z as any).source),
             impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
             center_lon: centerLon != null ? Number(centerLon) : null,
             center_lat: centerLat != null ? Number(centerLat) : null,
@@ -2684,8 +2721,17 @@ export default function CrisisMap({
     if (markersSource) {
       const markerFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
       for (const z of disasterZones) {
-        const centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon);
-        const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat);
+        let centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon);
+        let centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat);
+        if (centerLon == null || centerLat == null) {
+          // SPEC #1 (unified zone+dot): every zone paints a center dot — no
+          // explicit center falls back to the polygon centroid of its ring.
+          const centroid = disasterZoneCentroid(z);
+          if (centroid) {
+            centerLon = centroid[0];
+            centerLat = centroid[1];
+          }
+        }
         if (centerLon != null && centerLat != null && Number.isFinite(Number(centerLon)) && Number.isFinite(Number(centerLat))) {
           const lon = Number(centerLon);
           const lat = Number(centerLat);
@@ -2710,7 +2756,7 @@ export default function CrisisMap({
               display_label: displayLabel,
               zone_tier: (z as any).zone_tier || (tier === 'CONFIRMED' ? 'RED_CONFIRMED' : 'YELLOW_CLARIFY'),
               radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 0.6,
-              source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
+              source: normalizeSourceLabel((z as any).source || (z as any).source_name),
               impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
               center_lon: lon,
               center_lat: lat,
@@ -2924,7 +2970,11 @@ export default function CrisisMap({
           const midPt = r.waypoints[midIdx];
           if (!midPt || midPt.lon == null || midPt.lat == null) return;
           const isActive = (activeRouteIdx ?? 0) === idx;
-          const isHold = r.safety_status === 'HOLD_DELAY';
+          // SPEC #9: the map badge shows the HOLD warning ONLY when the route
+          // is proven to cross the hazard with no reasonable detour. The plain
+          // "HOLD (17 km)" text stays in the sidebar card, never on the map.
+          const hazardHit = Boolean(r.hazard_intersection?.has_intersection) && !r.hazard_intersection?.has_detour;
+          const holdDelayMinutes = Number(r.hazard_intersection?.estimated_delay_minutes);
           // Route payloads may omit/null distance_km or eta_minutes. Never call
           // toFixed on null: render an honest label instead of throwing (which
           // would kill the whole map effect).
@@ -2933,8 +2983,8 @@ export default function CrisisMap({
           const hasDistance = r.distance_km != null && Number.isFinite(distanceKm);
           const hasEta = r.eta_minutes != null && Number.isFinite(etaMinutes);
           const distanceLabel = hasDistance ? `${distanceKm.toFixed(0)} km` : 'Belum terverifikasi';
-          const label = isHold
-            ? `HOLD (${distanceLabel})`
+          const label = hazardHit
+            ? `Melewati zona bahaya — tanpa alternatif wajar (+${Number.isFinite(holdDelayMinutes) ? Math.round(holdDelayMinutes) : 0} menit)`
             : hasEta && hasDistance
               ? `${Math.round(etaMinutes)} min (${distanceLabel})`
               : hasEta
@@ -2948,7 +2998,7 @@ export default function CrisisMap({
             properties: {
               routeIndex: idx,
               label,
-              textColor: r.is_compromised ? '#ef4444' : isHold ? '#f59e0b' : isActive ? '#38b8f8' : 'rgba(232, 234, 237, 0.62)',
+              textColor: r.is_compromised ? '#ef4444' : hazardHit ? '#f59e0b' : isActive ? '#38b8f8' : 'rgba(232, 234, 237, 0.62)',
             },
           });
         });

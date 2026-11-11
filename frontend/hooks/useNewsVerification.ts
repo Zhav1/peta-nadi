@@ -229,6 +229,38 @@ export interface MarketRegimeData {
 }
 
 /**
+ * SPEC #4 source badges: every source string shown in the UI must resolve to
+ * the approved display set ONLY — BMKG, Berita, TomTom, NASA FIRMS, BNPB —
+ * with "Multi-sumber" as the honest fallback. GloFAS/GDACS are backend inputs
+ * and must NEVER appear as display labels; compound/aggregated strings
+ * ("BMKG CAP / GloFAS / GDACS") render as "Multi-sumber".
+ */
+export function normalizeSourceLabel(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return 'Multi-sumber';
+  const u = s.toLowerCase();
+  // Aggregated/compound provenance is not a single named source.
+  if (u.includes('/') || u.includes(',') || u.includes(';') || u.includes('&')) return 'Multi-sumber';
+  if (/tomtom/.test(u)) return 'TomTom';
+  if (/nasa|firms/.test(u)) return 'NASA FIRMS';
+  if (/bnpb/.test(u)) return 'BNPB';
+  if (/bmkg/.test(u)) return 'BMKG';
+  if (/antara|lkbn|berita|news|warta|media|press|tribun|detik|kompas|tempo|cnn|cnbc|republika|liputan|suara|jpnn|kumparan/.test(u)) return 'Berita';
+  return 'Multi-sumber';
+}
+
+/** SPEC #4: normalize a source array into the approved display set (deduped). */
+export function normalizeSourceList(raw: unknown): string[] {
+  const list: unknown[] = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+  const out: string[] = [];
+  for (const item of list) {
+    const label = normalizeSourceLabel(item);
+    if (label && !out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
+/**
  * Resolves a news permalink to the publisher's real article URL.
  *
  * M1 trust-fix decision "Drop unresolvable": this function never invents a
@@ -732,6 +764,17 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
                 : undefined;
               const geometry_polygon = (Array.isArray(a.geometry_polygon) ? a.geometry_polygon : Array.isArray(gtm.geometry_polygon) ? gtm.geometry_polygon : undefined) as [number, number][] | undefined;
               const verification_audit = (a.verification_audit ?? gtm.verification_audit) as VerificationAudit | undefined;
+              // SPEC #7 (berita zones paint): a geocoded row carrying a real
+              // radius_km is a spatial hazard signal — it is never dropped as
+              // irrelevant. Rescue it as an amber early-warning zone
+              // (YELLOW_CLARIFY) so every geocoded berita with radius paints.
+              const hasRealRadius =
+                radius_km != null && Number.isFinite(radius_km) && radius_km > 0 &&
+                lat != null && lon != null && Number.isFinite(lat) && Number.isFinite(lon);
+              if (resolvedTier === 'DROPPED_IRRELEVANT' && hasRealRadius) {
+                resolvedTier = 'YELLOW_CLARIFY';
+                resolvedReason = resolvedReason || 'Geocoded dengan radius terdampak — masuk Zona Kuning waspada (pantauan) menunggu konfirmasi lapangan.';
+              }
               const rawPubValue = a.pubDate || a.pub_date || a.published_at;
               const publishedAtRaw = typeof rawPubValue === 'string' && rawPubValue.trim().length > 0
                 ? rawPubValue.trim()
@@ -803,7 +846,12 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               // Phase 172.5: a regional row is deliberately gate-rejected — it is
               // display context, not a hazard — so it is admitted here and labelled
               // as such, while every other DROPPED_IRRELEVANT row stays hidden.
-              if (n.zone_tier === 'DROPPED_IRRELEVANT' && n.relevance_tier !== 'regional') return false;
+              // SPEC #7: a geocoded row carrying a real radius_km is never dropped
+              // as irrelevant — the radius is a spatial hazard signal.
+              const hasRealRadius =
+                n.radius_km != null && Number.isFinite(n.radius_km) && n.radius_km > 0 &&
+                n.lat != null && n.lon != null;
+              if (n.zone_tier === 'DROPPED_IRRELEVANT' && n.relevance_tier !== 'regional' && !hasRealRadius) return false;
               if (n.is_geocoded === false) return false;
               if (!n.link && !n.url) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;

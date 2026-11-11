@@ -66,6 +66,8 @@ interface RouteCardProps {
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  crisisHasEvidence: boolean;
  hasSelectedTrip: boolean;
+ /** SPEC #9: proven impacted trip (rit) exists — CTAs render only then. */
+ hasProvenImpactedTrip?: boolean;
  crisisIsSimulated: boolean;
  /** Prakiraan Waspada Dini: info-only, no actions. */
  isForecast?: boolean;
@@ -159,6 +161,8 @@ function RouteCard({
  selectedImpactedVehicle,
  crisisHasEvidence,
  hasSelectedTrip,
+ /** SPEC #9: proven impacted trip (rit) — CTAs render only then. */
+ hasProvenImpactedTrip = true,
  crisisIsSimulated,
  isForecast = false,
 }: RouteCardProps) {
@@ -180,9 +184,12 @@ function RouteCard({
  const hitlBlocked = crisisIsSimulated || isSimulated || !hasEvidence || isForecast;
  const blockedCopy = isForecast ? FORECAST_INFO_COPY : HITL_UNVERIFIED_COPY;
  const provenance = routeProvenanceLabel(route);
+ // SPEC #9: armada actions render only on a proven impacted trip (rit). Without
+ // one the card stays informational — no Approve/HOLD/Override affordances.
+ const hasActions = hasProvenImpactedTrip;
  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
- const approveLocked = (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST') || (!hasSelectedTrip && !isHoldStaging && role === 'DISPATCHER');
+ const approveLocked = !hasActions || (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST') || (!hasSelectedTrip && !isHoldStaging && role === 'DISPATCHER');
 
  const cardBorderColor = isCompromised
  ? 'border-red-500/50 bg-red-950/20'
@@ -205,7 +212,9 @@ function RouteCard({
  case 'air_intermodal':
  return 'Koridor Intermoda Udara + Darat (Cargo Air)';
  case 'hold_staging':
- return 'Opsi Tahan di Depo Penyangga (Hold & Buffer)';
+ return hasActions
+ ? 'Opsi Tahan di Depo Penyangga (Hold & Buffer)'
+ : 'Opsi Tahan di Depo Penyangga (Informasi)';
  default:
  return idx === 0 ? 'Rute Rekomendasi Utama' : `Rute Alternatif ${idx + 1}`;
  }
@@ -272,7 +281,7 @@ function RouteCard({
  </span>
  ) : isHoldStaging ? (
  <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
- <PauseCircle className="w-3.5 h-3.5 text-amber-400" /> Tahan
+ <PauseCircle className="w-3.5 h-3.5 text-amber-400" /> {hasActions ? 'Tahan' : 'Info'}
  </span>
  ) : (
  <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -538,6 +547,11 @@ function RouteCard({
  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
  <span>Rute Terdampak Gangguan (Tidak Disarankan)</span>
  </div>
+ ) : !hasActions ? (
+ /* SPEC #9: no proven impacted trip — informational warning only, no armada CTAs. */
+ <div className="w-full py-2 px-3 rounded-md bg-white/5 border border-white/10 text-slate-400 text-xs font-mono text-center">
+ Tidak ada trip (rit) terdampak terverifikasi — aksi armada (Setujui/Tahan/Alih) disembunyikan. Berita bersifat informasional.
+ </div>
  ) : (
  <>
  {role === 'REGULATOR' ? (
@@ -801,6 +815,15 @@ export function MitigationTab({
  const [routeApprovalNotes, setRouteApprovalNotes] = useState('');
  // Prakiraan Waspada Dini: advisory-only crisis: info-only, no route actions rendered.
  const isForecast = isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
+ // SPEC #3/#9 (HITL-only): a proven impacted trip exists when a real trip
+ // (rit) from the operational ledger is selected AND is proven to cross the
+ // zone — via the route's check-route intersection result or the DSS-impacted
+ // vehicle. Without it, HOLD/approval copy stays hidden (informational only).
+ const hasProvenImpactedTrip = Boolean(
+  operationalTrips.some(
+  (trip) => trip.id === selectedTravelId && ['planned', 'moving', 'rerouted'].includes(trip.status)
+  ) || selectedImpactedVehicle
+ );
 
  // Load existing approvals on mount for this incident
  useEffect(() => {
@@ -1354,6 +1377,7 @@ export function MitigationTab({
  economics={holdVsRerouteEconomics}
  route={activeRoute}
  rerouteCandidate={crisis.route_recommendations?.find((r) => r.corridor_type === 'land_detour')}
+ hasProvenImpactedTrip={hasProvenImpactedTrip}
  onApplyTactical={(action) => {
  if (action === 'HOLD') {
  const holdIdx = crisis.route_recommendations?.findIndex(
@@ -1398,6 +1422,7 @@ export function MitigationTab({
  route={route}
  idx={idx}
  hasSelectedTrip={operationalTrips.some((trip) => trip.id === selectedTravelId && ['planned', 'moving', 'rerouted'].includes(trip.status))}
+ hasProvenImpactedTrip={hasProvenImpactedTrip}
  crisisIsSimulated={crisis.is_simulated}
  isActive={isActive}
  onSelect={() => onSelectRoute(idx)}

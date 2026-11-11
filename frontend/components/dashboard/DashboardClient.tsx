@@ -39,7 +39,7 @@ import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
-import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, normalizeSourceLabel, normalizeSourceList, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
 import { isDocumentVisible } from '@/lib/visibility';
 import { DS } from '@/lib/designTokens';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
@@ -654,6 +654,72 @@ function FloatingMapLegend({
   );
 }
 
+/**
+ * SPEC #2 zone naming: short Indonesian hazard labels — "{Jenis bahaya} · {Lokasi}".
+ * No machine text like "simulated flood disruption critical 8km radius" ever
+ * reaches the zone title; "(CRITICAL - 8km Radius)"-style suffixes are gone.
+ */
+const HAZARD_TYPE_LABEL_ID: Record<string, string> = {
+  flood: 'Banjir',
+  landslide: 'Longsor',
+  earthquake: 'Gempa',
+  congestion: 'Kemacetan',
+  road_closure: 'Jalan Putus',
+  wildfire: 'Kebakaran Hutan',
+  port_closure: 'Pelabuhan Tutup',
+  marine_wave: 'Gelombang Tinggi',
+  volcanic_eruption: 'Letusan',
+  other_disruption: 'Gangguan',
+};
+
+/** Earthquake magnitude, when the payload/headline carries one (e.g. "Gempa M4.9"). */
+const extractMagnitudeFromText = (text?: string | null): number | null => {
+  if (!text) return null;
+  const m = String(text).match(/magnitudo\s+(\d+(?:[.,]\d+)?)/i) || String(text).match(/\bM\s?(\d+(?:\.\d+)?)\b/);
+  if (!m) return null;
+  const value = Number(String(m[1]).replace(',', '.'));
+  return Number.isFinite(value) ? value : null;
+};
+
+export const hazardTypeLabelId = (type?: string | null, magnitudeHint?: string | number | null): string => {
+  const key = String(type || '').toLowerCase();
+  const base = HAZARD_TYPE_LABEL_ID[key] ?? 'Gangguan';
+  if (key === 'earthquake') {
+    const mag = typeof magnitudeHint === 'number' ? magnitudeHint : extractMagnitudeFromText(magnitudeHint);
+    if (mag != null && Number.isFinite(mag)) return `${base} M${mag.toFixed(1)}`;
+  }
+  return base;
+};
+
+/** "{Jenis bahaya} · {Lokasi}"; unknown location falls back to rounded coordinates. */
+export const composeZoneTitleId = (
+  type?: string | null,
+  location?: string | null,
+  lon?: number | null,
+  lat?: number | null,
+  magnitudeHint?: string | number | null
+): string => {
+  const hazard = hazardTypeLabelId(type, magnitudeHint);
+  const loc = (location || '').trim();
+  if (loc) return `${hazard} · ${loc}`;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    return `${hazard} · ${Number(lat).toFixed(2)}, ${Number(lon).toFixed(2)}`;
+  }
+  return hazard;
+};
+
+/** Cheap nearest-hub name lookup from the static Sumatra hub table (SPEC #2). */
+export const nearestHubName = (lon: number, lat: number): string | null => {
+  let best: { name: string; distKm: number } | null = null;
+  for (const hub of Object.values(HUB_NODES)) {
+    const [hubLon, hubLat] = hub.coords;
+    const dKm = getHaversineDistanceKm([lon, lat], [hubLon, hubLat]);
+    if (!best || dKm < best.distKm) best = { name: hub.name, distKm: dKm };
+  }
+  // Only treat a hub as "nearest place" when it is genuinely close (< 25 km).
+  return best && best.distKm < 25 ? best.name : null;
+};
+
 export default function DashboardClient() {
   const { user, role, isAuthenticated, isLoading: isAuthLoading, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
   const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'reports' | 'evaluation'>(initialDashboardSection);
@@ -934,7 +1000,7 @@ export default function DashboardClient() {
   const setSimSpeed = useCallback((_v: number) => { void _v; }, []);
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [isClickTargeting, setIsClickTargeting] = useState(false);
-  const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
+  const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string; polygon?: [number, number][] } | null>(null);
   const [disasterZones, setDisasterZones] = useState<DisasterZone[]>([]);
   const [showRedZones, setShowRedZones] = useState<boolean>(true);
   const [showYellowZones, setShowYellowZones] = useState<boolean>(true);
@@ -1560,7 +1626,7 @@ export default function DashboardClient() {
             zone_tier: effectiveTier,
             forecast_tag: forecastActive ? FORECAST_TAG : undefined,
             forecast_valid_until: forecastActive ? (n.forecast_valid_until ?? null) : undefined,
-            title: n.affected_locations!.length > 1 ? `${loc.name} — ${n.headline}` : n.headline,
+            title: composeZoneTitleId(hazardType, loc.name || n.province, loc.longitude, loc.latitude, n.headline),
             tier_reason: n.tier_reason || '',
             custom_hazard_label: n.custom_hazard_label || n.headline,
             source_news_id: n.id,
@@ -1585,7 +1651,7 @@ export default function DashboardClient() {
           zone_tier: effectiveTier,
           forecast_tag: forecastActive ? FORECAST_TAG : undefined,
           forecast_valid_until: forecastActive ? (n.forecast_valid_until ?? null) : undefined,
-          title: n.headline,
+          title: composeZoneTitleId(hazardType, n.province, n.lon, n.lat, n.headline),
           tier_reason: n.tier_reason || '',
           custom_hazard_label: n.custom_hazard_label || n.headline,
           source_news_id: n.id,
@@ -1700,8 +1766,12 @@ export default function DashboardClient() {
       });
     }
 
+    // SPEC #7: berita zones are never dropped by the consensus merge — a
+    // geocoded news zone with radius and tier RED_CONFIRMED/YELLOW_CLARIFY
+    // always paints (red fill / amber halo) while its tier toggle is on.
+    // The consensus layer simply paints alongside it.
     if (consensusZones.length > 0) {
-      return [...consensusZones, ...filteredDisasterZones];
+      return [...consensusZones, ...filteredDisasterZones, ...consolidatedLive];
     }
     return [...crisisHazardZones, ...filteredDisasterZones, ...consolidatedLive];
   }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry, consensusHazards]);
@@ -2086,7 +2156,7 @@ export default function DashboardClient() {
           center: [Number(lon), Number(lat)],
           radiusKm: Number(rep.radius_km ?? rep.radiusKm ?? 0.6),
           severity: rep.severity || 'high',
-          source: rep.source || rep.source_name || 'BMKG CAP / GloFAS / GDACS',
+          source: normalizeSourceLabel(rep.source || rep.source_name),
           impactedCorridors: Array.isArray(rep.impacted_corridors)
             ? rep.impacted_corridors.join(', ')
             : (rep.impacted_corridor || rep.impacted_corridors || 'Koridor Logistik Sumatera'),
@@ -2132,7 +2202,7 @@ export default function DashboardClient() {
         id: d.id,
         crisis_id: d.id,
         type: d.type,
-        title: d.title,
+        title: composeZoneTitleId(d.type, undefined, d.center[0], d.center[1], d.title),
         risk: tier === 'CONFIRMED' ? 0.9 : 0.6,
         tier,
         sources: sourcesList,
@@ -2346,7 +2416,7 @@ export default function DashboardClient() {
     [updateUrlParams]
   );
 
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number } | null): Promise<boolean> => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number } | null, hazardPolygon?: [number, number][] | null): Promise<boolean> => {
     const originInfo = resolveNodeInfo(originId);
     const destInfo = resolveNodeInfo(destId);
     const originNode = originInfo?.coords;
@@ -2425,7 +2495,15 @@ export default function DashboardClient() {
         // Phase 170: the solver must actually return up to 3 alternatives; the
         // backend default alone is not enough when the UI expects them.
         k_alternatives: 3,
-        hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
+        hazard_zones: hazardCenter ? [{
+          center: hazardCenter,
+          radiusKm,
+          // SPEC routing-threading: forward the actual hazard polygon so the
+          // backend solver penalizes the real footprint, not just the point.
+          ...(hazardPolygon && hazardPolygon.length >= 3
+            ? { geometry: { type: 'Polygon', coordinates: [hazardPolygon] } }
+            : {}),
+        }] : [],
         // Forward hedging economics only when the caller supplied them;
         // no hardcoded cargo values are injected into every request.
         ...(effectiveHedgingOpts?.commodity ? { commodity: effectiveHedgingOpts.commodity } : {}),
@@ -2450,7 +2528,9 @@ export default function DashboardClient() {
         {
           commodity: effectiveHedgingOpts?.commodity,
           vehicleGolongan: effectiveHedgingOpts?.vehicle_golongan,
-        }
+        },
+        undefined,
+        hazardPolygon ?? null
       );
 
       // 1. Await visual detour corridors first for immediate sub-second rendering
@@ -2565,7 +2645,12 @@ export default function DashboardClient() {
         selectedDestNode,
         selectedModality,
         simulatedShockwave?.center || null,
-        selectedRadius
+        selectedRadius,
+        'flood',
+        undefined,
+        'RED_CONFIRMED',
+        undefined,
+        simulatedShockwave?.polygon ?? null
       );
     }
   }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute]);
@@ -2593,7 +2678,8 @@ export default function DashboardClient() {
         currentHazardType,
         undefined,
         currentZoneTier,
-        hedgingOpts
+        hedgingOpts,
+        simulatedShockwave?.polygon ?? null
       );
     }
   }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, selectedCrisis, updateBaselineMapboxRoute]);
@@ -2621,7 +2707,12 @@ export default function DashboardClient() {
         nodeId,
         selectedModality,
         simulatedShockwave?.center || null,
-        selectedRadius
+        selectedRadius,
+        'flood',
+        undefined,
+        'RED_CONFIRMED',
+        undefined,
+        simulatedShockwave?.polygon ?? null
       );
 
       // Only claim success when routes were actually applied; failures and aborts
@@ -2645,7 +2736,12 @@ export default function DashboardClient() {
         nodeId,
         selectedModality,
         simulatedShockwave?.center || null,
-        selectedRadius
+        selectedRadius,
+        'flood',
+        undefined,
+        'RED_CONFIRMED',
+        undefined,
+        simulatedShockwave?.polygon ?? null
       );
 
       if (routesReady) {
@@ -2861,6 +2957,7 @@ export default function DashboardClient() {
       center: hazardPoint,
       radiusKm: selectedRadius,
       hazardType: 'flood',
+      polygon: buildZoneRing(hazardPoint[0], hazardPoint[1], selectedRadius),
     });
 
     let resolvedRoutes: RouteRecommendation[] = [];
@@ -2882,7 +2979,11 @@ export default function DashboardClient() {
           selectedModality,
           (crisis.type as CrisisType) || 'flood',
           crisis.impact_profile,
-          crisis.zone_tier || 'RED_CONFIRMED'
+          crisis.zone_tier || 'RED_CONFIRMED',
+          undefined,
+          undefined,
+          undefined,
+          buildZoneRing(hazardPoint[0], hazardPoint[1], selectedRadius)
         );
 
         if (routeCalculationReqIdRef.current !== currentReqId) {
@@ -2907,7 +3008,9 @@ export default function DashboardClient() {
           ...demoRoutes[0],
           color: '#EF4444',
           safety_status: 'COMPROMISED' as const,
-          safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+          // SPEC #2: no "(+60m Delay)"-style suffix on the tag — the sidebar card
+          // renders the delay from the route metrics, not from the tag string.
+          safety_tag: 'TERDAMPAK ZONA BAHAYA',
           is_compromised: true,
         } : null);
 
@@ -2933,7 +3036,7 @@ export default function DashboardClient() {
     setActiveRouteIdx(0);
     setIsSidebarOpen(true);
     setToast({ message: `Skenario Aktif: ${crisis.title}`, type: 'success' });
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, clearImpactAssessment]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, clearImpactAssessment, buildZoneRing]);
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
@@ -3037,6 +3140,7 @@ export default function DashboardClient() {
           center: hazardCenter,
           radiusKm: demoRadiusKm,
           hazardType: 'flood',
+          polygon: buildZoneRing(hazardCenter[0], hazardCenter[1], demoRadiusKm),
         });
 
         // Calculate road-snapped Mapbox detour routes avoiding the hazard
@@ -3048,7 +3152,7 @@ export default function DashboardClient() {
         if (!demoOriginCoords || !demoDestCoords) break;
 
         demoState.setIsCalculatingRoute(true);
-        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality, 'flood', undefined, 'RED_CONFIRMED')
+        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality, 'flood', undefined, 'RED_CONFIRMED', undefined, undefined, undefined, buildZoneRing(hazardCenter[0], hazardCenter[1], demoRadiusKm))
           .then((rawRoutes) => {
             const safeDetours = rawRoutes.filter((r) => {
               const hasCoords = (r.waypoints && r.waypoints.length > 0) || (Array.isArray((r as any).coordinates) && (r as any).coordinates.length > 0) || (r.legs && r.legs.length > 0);
@@ -3109,7 +3213,7 @@ export default function DashboardClient() {
         break;
       }
     }
-  }, [demoState.stage, demoState.isRunning]);
+  }, [demoState.stage, demoState.isRunning, buildZoneRing]);
 
   // ---------------------------------------------------------------------------
   // PURE AGENTIC AI SPATIAL CLEARANCE PIPELINE ENGINE (0% Hardcode!)
@@ -3130,6 +3234,7 @@ export default function DashboardClient() {
         center: [lon, lat],
         radiusKm,
         hazardType: type,
+        polygon: buildZoneRing(lon, lat, radiusKm),
       });
     } else {
       setSimulatedShockwave(null);
@@ -3160,7 +3265,11 @@ export default function DashboardClient() {
       selectedModality,
       type,
       undefined,
-      'RED_CONFIRMED'
+      'RED_CONFIRMED',
+      undefined,
+      undefined,
+      undefined,
+      polygon && polygon.length >= 3 ? polygon : buildZoneRing(lon, lat, radiusKm)
     ).then((prelimRoutes) => {
       if (prelimRoutes.length > 0) {
         setCurrentMapRoutes(prelimRoutes);
@@ -3290,7 +3399,7 @@ export default function DashboardClient() {
         }
       }
     );
-  }, [selectedOriginNode, selectedDestNode, selectedModality, selectedVehicle, triggerSimulation, clearImpactAssessment]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, selectedVehicle, triggerSimulation, clearImpactAssessment, buildZoneRing]);
 
 const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number, number]; zoom?: number }> = [
   { keywords: ['belawan'], coords: [98.6850, 3.7850], zoom: 12 },
@@ -3429,7 +3538,15 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
     const zoneGeom = buildHazardSpecificZoneGeometry(lon, lat, hazardType, zoneTier, agentRadiusKm, backendPolygon);
     const radiusKm = zoneGeom.radiusKm;
     const verificationAudit = newsItem?.verification_audit || fallbackZone?.verification_audit;
-    const title: string = newsItem?.headline || fallbackZone?.title || customHazardLabel;
+    // SPEC #2: the sidebar title is the composed Indonesian zone label —
+    // "{Jenis bahaya} · {Lokasi}" — never the raw headline or machine string.
+    const title: string = composeZoneTitleId(
+      hazardType,
+      resolvedAffected?.[0]?.name || newsItem?.province,
+      lon,
+      lat,
+      newsItem?.headline || fallbackZone?.title
+    );
     const source: string = newsItem?.source_name || 'Sumber Berita Terverifikasi';
     const link: string = newsItem?.link || newsItem?.url || '';
     const summary: string = newsItem?.summary || tierReason;
@@ -3500,7 +3617,11 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
             selectedModality,
             hazardType,
             impactProfile,
-            zoneTier
+            zoneTier,
+            undefined,
+            undefined,
+            undefined,
+            zoneGeom.polygon
           );
           setCurrentMapRoutes(routes);
           setActiveRouteIdx(0);
@@ -3575,7 +3696,14 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
       ],
       zone_tier: zoneTier,
       tier: fallbackZone?.tier || (zoneTier === 'RED_CONFIRMED' ? 'CONFIRMED' : 'WATCH'),
-      sources: fallbackZone?.sources || (newsItem?.source_name ? [newsItem.source_name] : ['BMKG CAP']),
+      // SPEC #4: source labels resolve to the approved display set only.
+      sources: (() => {
+        const rawSources = fallbackZone?.sources && fallbackZone.sources.length > 0
+          ? fallbackZone.sources
+          : (newsItem?.source_name ? [newsItem.source_name] : null);
+        const normalized = normalizeSourceList(rawSources);
+        return normalized.length > 0 ? normalized : ['Multi-sumber'];
+      })(),
       geometry_role: fallbackZone?.geometry_role || 'buffer_footprint',
       forecast_tag: forecastActive ? FORECAST_TAG : undefined,
       forecast_valid_until: forecastValidUntil ?? null,
@@ -3583,7 +3711,9 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
       custom_hazard_label: customHazardLabel,
       impact_profile: impactProfile,
       affected_locations: resolvedAffected,
-      radius_km: radiusKm,
+      // SPEC #2: carry the actual affected radius (real radius_km when the
+      // zone/news carries one) so the sidebar can render "Radius terdampak aktual".
+      radius_km: fallbackZone?.radius_km ?? newsItem?.radius_km ?? radiusKm,
       geometry_polygon: zoneGeom.polygon,
       verification_audit: verificationAudit,
       evidence: {
@@ -3778,12 +3908,14 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
     severity: Severity = 'critical'
   ) => {
     setIsClickTargeting(false);
+    // SPEC #2: short Indonesian label — "Simulasi: {Jenis bahaya} · {Lokasi}".
+    // Nearest-hub name when one is close, else rounded coordinates.
     triggerFullSimulationEngine(
       lat,
       lon,
       type,
       radiusKm,
-      `Simulated ${type.toUpperCase()} Disruption (${severity.toUpperCase()} - ${radiusKm}km Radius)`,
+      `Simulasi: ${composeZoneTitleId(type, nearestHubName(lon, lat), lon, lat)}`,
       false, // Point mode
       severity
     );
@@ -3811,7 +3943,7 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
       centerLon,
       'flood',
       selectedRadius,
-      'Custom Area Disruption (MapboxDraw Polygon)',
+      `Simulasi: ${composeZoneTitleId('flood', nearestHubName(centerLon, centerLat), centerLon, centerLat)}`,
       true, // Polygon mode
       severity,
       ring
@@ -4348,8 +4480,12 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                   const isRegional = item.relevance_tier === 'regional';
 
                   const handleFocusMap = () => {
-                    // Berita is information only: focus map & inspect audit trail in sidebar
-                    void inspectNewsOrZoneAuditTrail(item, undefined);
+                    // SPEC #7: card click focuses the LINKED ZONE — look it up in
+                    // combinedDisasterZones by source_news_id so the camera flies to
+                    // the zone center and the zone gets the selected highlight, with
+                    // the stored audit trail opened in the unified sidebar.
+                    const linkedZone = combinedDisasterZones.find((z) => z.source_news_id === item.id);
+                    void inspectNewsOrZoneAuditTrail(item, linkedZone);
                   };
 
                   return (
@@ -4367,7 +4503,7 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                       <div className="flex items-center justify-between gap-1 text-xs font-mono">
                         <div className="flex items-center gap-1.5 truncate">
                           <span className="px-1.5 py-0.5 rounded border text-xs font-semibold uppercase bg-white/5 text-[#e8eaed] border-white/10">
-                            {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
+                            {normalizeSourceLabel(item.source_name || (isOfficial ? 'ANTARA' : 'BERITA'))}
                           </span>
                           {item.published_at ? (
                             <FreshnessBadge
@@ -5032,11 +5168,23 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                 setActiveTab={setActiveTab}
                 activeRouteIdx={activeRouteIdx}
                 hasRoute={(() => {
-                  // Evidence-only gate: hold_staging (forecast HOLD placeholder)
-                  // never counts as a route — only real corridors unlock tabs.
+                  // SPEC #3 (HITL-only tabs): Mitigasi & Dampak Ekonomi unlock ONLY
+                  // when a real trip (rit) is selected or DSS-impacted AND proven to
+                  // cross the zone. Proof = the route's own check-route intersection
+                  // result (hazard_intersection), or the DSS-impacted vehicle for
+                  // this zone. Otherwise the sidebar falls back to Evidence-only.
                   const routes = currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations ?? []);
-                  if (activeRouteIdx != null && routes[activeRouteIdx]?.corridor_type !== 'hold_staging') return true;
-                  return routes.some((r) => r.corridor_type !== 'hold_staging');
+                  if (routes.length === 0 || routes.every((r) => r.corridor_type === 'hold_staging')) return false;
+                  const tripSelected = operationalTrips.some(
+                    (trip) => trip.id === selectedTravelId && ['planned', 'moving', 'rerouted'].includes(trip.status)
+                  );
+                  const tripImpacted = Boolean(selectedImpactedVehicle);
+                  if (!tripSelected && !tripImpacted) return false;
+                  const activeRoute = activeRouteIdx != null
+                    ? routes[activeRouteIdx]
+                    : routes.find((r) => r.corridor_type !== 'hold_staging');
+                  if (activeRoute?.hazard_intersection?.has_intersection) return true;
+                  return tripImpacted;
                 })()}
                 onSelectRoute={(idx) => void handleSelectRoute(idx, 'sidebar')}
                 onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}

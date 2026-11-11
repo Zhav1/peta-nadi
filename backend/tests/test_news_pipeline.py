@@ -318,3 +318,63 @@ async def test_get_live_news_returns_live_state_when_cached(monkeypatch):
     assert res["status"] == "live"
     assert res["count"] == 1
     assert len(res["articles"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Postgres 21000 guard: duplicate `link` rows in one upsert batch are collapsed
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_news_upsert_dedupes_duplicate_links_in_batch(monkeypatch):
+    """Duplicate `link` rows in one batch are collapsed (newest wins), so the
+    ON CONFLICT statement never affects the same row twice."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import news_aggregator
+
+    captured_chunks = []
+
+    class FakeTable:
+        def upsert(self, chunk, on_conflict=None):
+            captured_chunks.append(list(chunk))
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[{"ok": True} for _ in captured_chunks[-1]])
+
+    class FakeSupabase:
+        def table(self, name):
+            return FakeTable()
+
+    monkeypatch.setattr("app.db.supabase_client.get_service_client", lambda: FakeSupabase())
+
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(hours=2)).isoformat()
+    new = now.isoformat()
+    count = await news_aggregator.upsert_articles_to_supabase([
+        {"id": "n1", "title": "Old", "link": "https://x.test/a", "published_at": old},
+        {"id": "n2", "title": "New", "link": "https://x.test/a", "published_at": new},
+        {"id": "n3", "title": "Other", "link": "https://x.test/b", "published_at": new},
+    ])
+
+    assert count == 2
+    flat = [r for chunk in captured_chunks for r in chunk]
+    assert len(flat) == 2
+    by_link = {r["link"]: r for r in flat}
+    assert by_link["https://x.test/a"]["id"] == "n2"  # newest kept
+    assert by_link["https://x.test/b"]["id"] == "n3"
+
+
+def test_dedupe_records_by_link_keeps_newest_and_preserves_order():
+    from app.services.news_aggregator import _dedupe_records_by_link
+
+    records = [
+        {"link": "https://x.test/1", "title": "a", "published_at": "2026-11-11T01:00:00+00:00"},
+        {"link": "https://x.test/2", "title": "b"},
+        {"link": "https://x.test/1", "title": "a-newer", "published_at": "2026-11-11T05:00:00+00:00"},
+        {"link": "https://x.test/1", "title": "a-oldest", "published_at": "2026-11-10T00:00:00+00:00"},
+    ]
+    deduped = _dedupe_records_by_link(records)
+    # First-occurrence order is preserved (stable); "b" sits at index 1.
+    assert [r["title"] for r in deduped] == ["b", "a-newer"]
+    assert _dedupe_records_by_link([]) == []

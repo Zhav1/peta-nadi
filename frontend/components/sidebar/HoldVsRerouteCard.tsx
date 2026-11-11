@@ -27,6 +27,8 @@ interface HoldVsRerouteCardProps {
   rerouteCandidate?: RouteRecommendation | null;
   single_chokepoint?: boolean;
   single_chokepoint_note?: string;
+  /** SPEC #9: proven impacted trip (rit) — HOLD copy/CTAs render only then. */
+  hasProvenImpactedTrip?: boolean;
 }
 
 export function HoldVsRerouteCard({
@@ -38,6 +40,8 @@ export function HoldVsRerouteCard({
   rerouteCandidate,
   single_chokepoint,
   single_chokepoint_note,
+  /** Default true: standalone/modal usages keep the existing affordances. */
+  hasProvenImpactedTrip = true,
 }: HoldVsRerouteCardProps) {
   const isSingleChokepoint = Boolean(
     single_chokepoint ??
@@ -57,6 +61,9 @@ export function HoldVsRerouteCard({
 
   const isHoldRecommended = isSingleChokepoint || economics.recommended_action === 'HOLD';
   const effectiveAction: 'HOLD' | 'REROUTE' = isSingleChokepoint ? 'HOLD' : economics.recommended_action;
+  // SPEC #9: without a proven impacted trip the card is informational only —
+  // the HOLD recommendation copy and the Terapkan CTA stay hidden.
+  const hasActions = hasProvenImpactedTrip;
 
   const money = (value?: number | null) =>
     typeof value === 'number' && Number.isFinite(value)
@@ -123,7 +130,9 @@ export function HoldVsRerouteCard({
             <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
           )}
           <span>
-            Saran: {isSingleChokepoint ? 'Tahan (Prioritas)' : effectiveAction === 'HOLD' ? 'Tahan' : 'Alih'}
+            {hasActions
+              ? `Saran: ${isSingleChokepoint ? 'Tahan (Prioritas)' : effectiveAction === 'HOLD' ? 'Tahan' : 'Alih'}`
+              : 'Saran: — (belum ada trip terdampak terverifikasi)'}
           </span>
         </span>
       </div>
@@ -144,7 +153,9 @@ export function HoldVsRerouteCard({
           />
           <div>
             <span className="font-bold block mb-0.5">
-              {isSingleChokepoint
+              {!hasActions
+                ? 'Analisis informasional — belum ada trip (rit) terdampak terverifikasi.'
+                : isSingleChokepoint
                 ? 'Strategi Prioritas: Tahan Armada di Depo Penyangga (Koridor Tunggal)'
                 : isHoldRecommended
                 ? 'Strategi Optimal: Tahan Armada di Depo Penyangga'
@@ -237,7 +248,7 @@ export function HoldVsRerouteCard({
             <span className="flex items-center gap-1 text-xs text-slate-300">
               <Building2 className="w-3 h-3 text-amber-400" /> Tahan di Depo
             </span>
-            {isHoldRecommended && (
+            {hasActions && isHoldRecommended && (
               <span className="text-xs px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">
                 {isSingleChokepoint ? 'Sangat Dianjurkan' : 'Efisien'}
               </span>
@@ -284,8 +295,8 @@ export function HoldVsRerouteCard({
         </span>
       </div>
 
-      {/* Tactical Quick Action Trigger */}
-      {onApplyTactical && (
+      {/* Tactical Quick Action Trigger — SPEC #9: only on a proven impacted trip. */}
+      {onApplyTactical && hasActions && (
         <div className="flex gap-2 pt-1">
           <button
             type="button"

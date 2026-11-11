@@ -97,6 +97,8 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'bengkulu_jalinbar', name: 'Simpang Lima Ratu Samban Bengkulu', coords: [102.2655, -3.8004], region: 'bengkulu' },
   { id: 'padang_by_pass', name: 'By Pass Kota Padang', coords: [100.3543, -0.9492], region: 'sumbar' },
   { id: 'bukittinggi_sentral', name: 'Simpang Aur Kuning Bukittinggi', coords: [100.3692, -0.3056], region: 'sumbar' },
+  { id: 'batu_taba_jct', name: 'Simpang Batu Taba (Lintas Timur)', coords: [100.55, -0.55], region: 'sumbar' },
+  { id: 'pariangan_jct', name: 'Simpang Pariangan', coords: [100.55, -0.47], region: 'sumbar' },
   { id: 'sitinjau_lauik_apex', name: 'Panorama Sitinjau Lauik Apex', coords: [100.5200, -0.9500], region: 'sumbar' },
   { id: 'palembang_kramasan', name: 'Interchange Kramasan Palembang', coords: [104.7565, -2.9909], region: 'sumsel', isTollGate: true },
   { id: 'terbanggi_besar_tol', name: 'Interchange Terbanggi Besar', coords: [105.1800, -4.8500], region: 'lampung', isTollGate: true },
@@ -778,7 +780,8 @@ export function calculateHazardExposureMetrics(
   hazardCenter: LonLat,
   radiusKm: number,
   dangerBufferKm: number = 2.0,
-  hazardPolygon?: LonLatRing | null
+  hazardPolygon?: LonLatRing | null,
+  endpointToleranceKm: number = 0
 ): HazardExposureMetrics {
   if (!polyline || polyline.length === 0) {
     return {
@@ -791,24 +794,46 @@ export function calculateHazardExposureMetrics(
     };
   }
 
+  // Spec #5 (close-area routing): when endpointToleranceKm > 0, strip leading /
+  // trailing vertices within the tolerance of the hazard center BEFORE any
+  // intersection/exposure math. A detour must avoid the zone BETWEEN its
+  // endpoints — an origin or destination sitting inside the zone must not veto
+  // an otherwise-clean bypass. Default 0 keeps every legacy call site identical.
+  let evaluatedPolyline = polyline;
+  if (endpointToleranceKm > 0 && polyline.length >= 2) {
+    let startIdx = 0;
+    while (
+      startIdx < polyline.length - 1 &&
+      getHaversineDistanceKm(polyline[startIdx], hazardCenter) <= endpointToleranceKm
+    ) startIdx++;
+    let endIdx = polyline.length - 1;
+    while (
+      endIdx > startIdx &&
+      getHaversineDistanceKm(polyline[endIdx], hazardCenter) <= endpointToleranceKm
+    ) endIdx--;
+    if (startIdx > 0 || endIdx < polyline.length - 1) {
+      evaluatedPolyline = polyline.slice(startIdx, endIdx + 1);
+    }
+  }
+
   const hasPolygon = Boolean(hazardPolygon && Array.isArray(hazardPolygon) && hazardPolygon.length >= 3);
-  const polyIntersecting = hasPolygon ? routeIntersectsPolygonRing(polyline, hazardPolygon!) : false;
+  const polyIntersecting = hasPolygon ? routeIntersectsPolygonRing(evaluatedPolyline, hazardPolygon!) : false;
 
   const effectiveRadius = radiusKm + dangerBufferKm;
   let totalLengthKm = 0;
   let exposedLengthKm = 0;
   let minDistance = Infinity;
 
-  for (let i = 0; i < polyline.length; i++) {
-    const distToCenter = getHaversineDistanceKm(polyline[i], hazardCenter);
+  for (let i = 0; i < evaluatedPolyline.length; i++) {
+    const distToCenter = getHaversineDistanceKm(evaluatedPolyline[i], hazardCenter);
     if (distToCenter < minDistance) minDistance = distToCenter;
 
-    if (i < polyline.length - 1) {
-      const segLength = getHaversineDistanceKm(polyline[i], polyline[i + 1]);
+    if (i < evaluatedPolyline.length - 1) {
+      const segLength = getHaversineDistanceKm(evaluatedPolyline[i], evaluatedPolyline[i + 1]);
       totalLengthKm += segLength;
 
-      const A = polyline[i];
-      const B = polyline[i + 1];
+      const A = evaluatedPolyline[i];
+      const B = evaluatedPolyline[i + 1];
       const H = hazardCenter;
       const dx = B[0] - A[0];
       const dy = B[1] - A[1];
@@ -852,6 +877,44 @@ export function calculateHazardExposureMetrics(
     maxProximity: Math.round(maxProximity * 100) / 100,
     riskPenaltyScore: Math.round(riskPenaltyScore * 10) / 10,
   };
+}
+
+/**
+ * Spec #5: line-circle variant of findRouteIntersectingSegments (polygonGeom).
+ * Used when no hazard polygon exists but a center + radius do: walks the route
+ * segments and emits every segment whose closest approach to the circle center
+ * is within radiusKm, in the SAME { segment_index, start, end } shape so
+ * CrisisMap's red-dashed crossing layer renders identically for both paths.
+ */
+function findRouteCircleIntersectingSegments(
+  route: LonLat[],
+  center: LonLat,
+  radiusKm: number
+): Array<{ segment_index: number; start: LonLat; end: LonLat }> {
+  if (!route || route.length < 2 || !center || !(radiusKm > 0)) return [];
+
+  const results: Array<{ segment_index: number; start: LonLat; end: LonLat }> = [];
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const A = route[i];
+    const B = route[i + 1];
+    const dx = B[0] - A[0];
+    const dy = B[1] - A[1];
+    const lenSq = dx * dx + dy * dy;
+
+    let closestDist = getHaversineDistanceKm(A, center);
+    if (lenSq > 0) {
+      const t = Math.max(0, Math.min(1, ((center[0] - A[0]) * dx + (center[1] - A[1]) * dy) / lenSq));
+      const closest: LonLat = [A[0] + t * dx, A[1] + t * dy];
+      closestDist = getHaversineDistanceKm(closest, center);
+    }
+
+    if (closestDist <= radiusKm) {
+      results.push({ segment_index: i, start: A, end: B });
+    }
+  }
+
+  return results;
 }
 
 export interface RouteHazardAssessment {
@@ -1330,7 +1393,8 @@ export async function fetchMapboxAlternativeDrivingRoutes(
   destination: LonLat,
   waypoints: LonLat[] = [],
   exclude: boolean | ExcludeOptions = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  hazardAvoidanceContext?: { center: LonLat; radiusKm: number } | null
 ): Promise<MapboxRouteResult[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const fallbackCoords = [origin, ...waypoints, destination];
@@ -1420,12 +1484,51 @@ export async function fetchMapboxAlternativeDrivingRoutes(
     } else {
       // Phase 57 WP-A3 (D4): honest unavailable path. Straight-line estimate is
       // labeled SIMULASI/OFFLINE at every render site: never presented as live.
+      // Spec #5 (close-area routing): an offline estimate must never draw a
+      // straight line THROUGH an active hazard zone. When the straight chord
+      // crosses the zone, bend it via the nearest arterial junction (by
+      // origin->node->destination score, matching the Layer-A bypass pattern)
+      // that clears the zone by >= 2.0 km. Still a SIMULASI line — but one that
+      // respects the closure. No qualifying node -> keep the straight line; it
+      // is then honestly red-dashed as a crossing segment on the map.
+      let offlineCoords = fallbackCoords;
+      let offlineDistanceKm = fallbackDistance;
+      let offlineSummary = 'SIMULASI/OFFLINE: garis lurus, bukan geometri jalan live';
+      if (hazardAvoidanceContext) {
+        const { center, radiusKm } = hazardAvoidanceContext;
+        const straightExposure = calculateHazardExposureMetrics(fallbackCoords, center, radiusKm, 2.0);
+        if (straightExposure.isIntersecting) {
+          const clearanceKm = radiusKm + 2.0;
+          const candidateNodes = HIGHWAY_JUNCTION_NODES
+            .filter((node) => getHaversineDistanceKm(node.coords, center) >= clearanceKm)
+            .map((node) => ({
+              node,
+              score: getHaversineDistanceKm(origin, node.coords) + getHaversineDistanceKm(node.coords, destination),
+            }))
+            .sort((a, b) => a.score - b.score);
+
+          for (const cand of candidateNodes) {
+            const bentCoords: LonLat[] = [origin, ...waypoints, cand.node.coords, destination];
+            const bentExposure = calculateHazardExposureMetrics(bentCoords, center, radiusKm, 2.0);
+            if (!bentExposure.isIntersecting) {
+              offlineCoords = bentCoords;
+              let legsKm = 0;
+              for (let i = 0; i < bentCoords.length - 1; i++) {
+                legsKm += getHaversineDistanceKm(bentCoords[i], bentCoords[i + 1]);
+              }
+              offlineDistanceKm = legsKm * 1.15;
+              offlineSummary = `SIMULASI/OFFLINE: garis lurus via ${cand.node.name} (menghindari zona bahaya), bukan geometri jalan live`;
+              break;
+            }
+          }
+        }
+      }
       results.push({
-        coordinates: fallbackCoords,
-        distanceKm: Math.round(fallbackDistance),
-        durationMinutes: Math.round((fallbackDistance / 60) * 60),
+        coordinates: offlineCoords,
+        distanceKm: Math.round(offlineDistanceKm),
+        durationMinutes: Math.round((offlineDistanceKm / 60) * 60),
         congestionSegments: [],
-        summary: 'SIMULASI/OFFLINE: garis lurus, bukan geometri jalan live',
+        summary: offlineSummary,
         source: 'offline-interpolated',
       });
     }
@@ -2193,7 +2296,16 @@ export async function calculateAIDynamicDetourRoutes(
   const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
   // STEP 1: Compute Land Routes (Primary & Alternative / Bypass)
-  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll, signal);
+  // Spec #5: hand the hazard center/radius to the fetcher so an offline
+  // straight-line fallback bends around the zone instead of crossing it.
+  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(
+    origin,
+    destination,
+    [],
+    excludeToll,
+    signal,
+    hazardCenter ? { center: hazardCenter, radiusKm } : null
+  );
 
   // When Mapbox alternatives=true returns only 1 route (so mapboxResults[1] is undefined),
   // actively request an alternative driving route via a secondary arterial junction from HIGHWAY_JUNCTION_NODES
@@ -2309,6 +2421,12 @@ export async function calculateAIDynamicDetourRoutes(
   let isSingleChokepoint = false;
   const singleChokepointNote =
     'Koridor Pegunungan Tunggal: Tidak tersedia jalan alternatif bebas bencana dalam radius 80 km. Rute melintasi zona perkiraan risiko BMKG (Precautionary Risk) — disarankan pertimbangkan penahanan muatan (Hold Staging) atau konfirmasi satgas lapangan sebelum melintas.';
+  // Spec #5 gate: a bypass is only acceptable if it stays within 2x the direct
+  // distance. Direct = primary Mapbox distance; offline fallback = haversine * 1.15.
+  const directDistanceKm = isPrimaryOffline
+    ? getHaversineDistanceKm(origin, destination) * 1.15
+    : primaryRes.distanceKm;
+  const maxBypassDistanceKm = 2 * directDistanceKm;
 
   // If primary route intersects hazard shockwave (or port access is blocked),
   // actively solve detour around hazard / closed-port perimeter via Dual-Layer Hazard Avoidance.
@@ -2329,7 +2447,8 @@ export async function calculateAIDynamicDetourRoutes(
         destination,
         [],
         pointExcludeOpts,
-        signal
+        signal,
+        hazardCenter ? { center: hazardCenter, radiusKm } : null
       );
       if (pointBypassResults && pointBypassResults.length > 0) {
         for (const bypass of pointBypassResults) {
@@ -2367,8 +2486,18 @@ export async function calculateAIDynamicDetourRoutes(
         throwIfAborted(signal);
         const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, bypassExcludeOpts, signal);
         if (bypass) {
-          const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm, evalBufferKm);
-          if (!m.isIntersecting && m.exposureKm === 0) {
+          // Spec #5: tolerate endpoint legs inside the zone (origin/destination
+          // may sit at/inside it) — the bypass is judged on the part BETWEEN the
+          // endpoints — and cap the detour at 2x the direct distance.
+          const m = calculateHazardExposureMetrics(
+            bypass.coordinates,
+            hazardCenter,
+            radiusKm,
+            evalBufferKm,
+            null,
+            radiusKm + 2.0
+          );
+          if (!m.isIntersecting && m.exposureKm === 0 && bypass.distanceKm <= maxBypassDistanceKm) {
             landDetourResult = bypass;
             landDetourColor = '#10B981';
             landDetourTag = `PENGALIHAN AMAN (${cand.name.toUpperCase()})`;
@@ -2396,8 +2525,16 @@ export async function calculateAIDynamicDetourRoutes(
         const waypoint = computeTangentialWaypoint(origin, destination, hazardCenter, clearanceKm, ang);
         const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, tangentExcludeOpts, signal);
         if (radial) {
-          const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm, evalBufferKm);
-          if (!m.isIntersecting && m.exposureKm === 0) {
+          // Spec #5: same endpoint tolerance + 2x direct-distance cap as Layer A.
+          const m = calculateHazardExposureMetrics(
+            radial.coordinates,
+            hazardCenter,
+            radiusKm,
+            evalBufferKm,
+            null,
+            radiusKm + 2.0
+          );
+          if (!m.isIntersecting && m.exposureKm === 0 && radial.distanceKm <= maxBypassDistanceKm) {
             validTangents.push({ result: radial, angle: ang });
           }
         }
@@ -2421,7 +2558,12 @@ export async function calculateAIDynamicDetourRoutes(
     }
   }
 
-  const landDetour: RouteRecommendation = {
+  // Spec #5 (corridor-2 dedup): when Mapbox returned no natural alternative AND
+  // no detour was found, landDetourResult is still the primary route object —
+  // emitting it would draw the exact same line twice under a different name.
+  // Skip the corridor-2 object entirely; the primary route + its
+  // hazard_intersection warning carries the decision.
+  const landDetour: RouteRecommendation | null = landDetourResult === primaryRes ? null : {
     id: 'corridor-land-detour',
     route_name: isPrimaryCompromised ? 'Rute Pengalihan Darat (Detour)' : 'Alternatif Darat (Jalur Arteri)',
     description: isPrimaryCompromised
@@ -2479,7 +2621,7 @@ export async function calculateAIDynamicDetourRoutes(
       origin,
       destination,
       landPrimary.distance_km,
-      landDetour.distance_km,
+      landDetour?.distance_km ?? landPrimary.distance_km,
       hazardCenter,
       radiusKm,
       hazardType
@@ -2493,7 +2635,7 @@ export async function calculateAIDynamicDetourRoutes(
     }
 
     landPrimary.economic_comparison = econ;
-    landDetour.economic_comparison = econ;
+    if (landDetour) landDetour.economic_comparison = econ;
     seaCorridor.economic_comparison = econ;
     airCorridor.economic_comparison = econ;
 
@@ -2540,7 +2682,7 @@ export async function calculateAIDynamicDetourRoutes(
     };
   }
 
-  const allCorridors: RouteRecommendation[] = [landPrimary, landDetour, seaCorridor, airCorridor];
+  const allCorridors: RouteRecommendation[] = [landPrimary, ...(landDetour ? [landDetour] : []), seaCorridor, airCorridor];
   if (holdCorridor) {
     allCorridors.push(holdCorridor);
   }
@@ -2650,7 +2792,14 @@ export async function calculateAIDynamicDetourRoutes(
 
   if (primaryMetrics.isIntersecting || landPrimary.is_compromised) {
     const hasViableDetour = allCorridors.slice(1).some((r) => r.viable && r.safety_status !== 'COMPROMISED' && r.corridor_type !== 'hold_staging');
-    const affected = hazardPolygon ? findRouteIntersectingSegments(primaryRes.coordinates, hazardPolygon) : [];
+    // Spec #5: polygon path stays primary; without a polygon, fall back to a
+    // line-circle intersection against (hazardCenter, radiusKm + 0.5 km) so the
+    // red-dashed crossing layer still renders for center/radius hazards.
+    const affected = hazardPolygon
+      ? findRouteIntersectingSegments(primaryRes.coordinates, hazardPolygon)
+      : hazardCenter
+        ? findRouteCircleIntersectingSegments(primaryRes.coordinates, hazardCenter, radiusKm + 0.5)
+        : [];
     const extraDelayMins = Math.max(15, Math.round(primaryMetrics.exposureKm * 3.5));
     landPrimary.hazard_intersection = {
       has_intersection: true,

@@ -7,6 +7,7 @@ import { EconomicTab } from './EconomicTab';
 import { CausalChainPanel } from './CausalChainPanel';
 import type { CrisisState, RouteRecommendation } from '@/lib/types';
 import { normalizeRegion } from '@/lib/region';
+import { normalizeSourceLabel, normalizeSourceList } from '@/hooks/useNewsVerification';
 
 const TABS = ['Evidence', 'Mitigation', 'Economic'] as const;
 type Tab = typeof TABS[number];
@@ -132,12 +133,21 @@ export function CrisisSidebar({
  <p className="text-xs text-slate-400 font-mono mt-0.5">
  {normalizeRegion(crisis.region)}
  </p>
+ {/* SPEC #2: actual affected radius — real radius_km only, honest null otherwise. */}
+ {typeof crisis.radius_km === 'number' && Number.isFinite(crisis.radius_km) && crisis.radius_km > 0 && (
+ <p className="text-xs text-slate-400 font-mono mt-0.5">
+ Radius terdampak aktual: {crisis.radius_km.toFixed(1)} km
+ </p>
+ )}
  {crisis.tier_reason && (
  <div className="mt-2.5 p-2 rounded-lg bg-[#121822] border border-white/10 space-y-1">
-   <p className="text-xs text-slate-200 font-sans leading-relaxed">{crisis.tier_reason}</p>
+   {/* SPEC #4: one line in the header; the full chain stays in the Bukti tab. */}
+   <p className="text-xs text-slate-200 font-sans leading-relaxed line-clamp-1" title={crisis.tier_reason}>{crisis.tier_reason}</p>
    {((crisis as any).sources?.length || (crisis as any).sources_label) && (
      <p className="text-[11px] text-slate-400 font-mono">
-       Sumber: {Array.isArray((crisis as any).sources) ? (crisis as any).sources.join(', ') : String((crisis as any).sources_label || '')}
+       Sumber: {Array.isArray((crisis as any).sources)
+         ? (normalizeSourceList((crisis as any).sources).join(', ') || 'Multi-sumber')
+         : normalizeSourceLabel((crisis as any).sources_label)}
      </p>
    )}
  </div>

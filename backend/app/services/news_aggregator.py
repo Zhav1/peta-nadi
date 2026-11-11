@@ -1218,6 +1218,53 @@ async def fetch_all_multi_outlet_news() -> List[Dict[str, Any]]:
     return unique_articles
 
 
+def _record_pub_ts(rec: Dict[str, Any]) -> Optional[datetime]:
+    """Newest parseable publication timestamp on an upsert record (None if absent)."""
+    for k in ("published_at", "original_pub_date", "pubDate", "created_at", "updated_at"):
+        try:
+            dt = _parse_pub_date_to_utc(rec.get(k))
+        except Exception:
+            dt = None
+        if dt is not None:
+            return dt
+    return None
+
+
+def _dedupe_records_by_link(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Drops duplicate `link` rows within one upsert batch, keeping the newest.
+
+    Postgres raises 21000 ('ON CONFLICT DO UPDATE command cannot affect row a
+    second time') when a single INSERT ... ON CONFLICT statement mentions the
+    same unique key twice — duplicate links in one batch used to kill the whole
+    50-row chunk and intermittently drop an entire news cycle. Newest wins by
+    published_at; ties (or missing timestamps) resolve to the later occurrence
+    in the batch. Rows without a `link` pass through untouched.
+    """
+    if not records:
+        return records
+    kept: Dict[str, Tuple[Optional[datetime], int, Dict[str, Any]]] = {}
+    tail: List[Dict[str, Any]] = []
+    for idx, rec in enumerate(records):
+        if not isinstance(rec, dict):
+            tail.append(rec)
+            continue
+        link = str(rec.get("link") or "").strip()
+        if not link:
+            tail.append(rec)
+            continue
+        ts = _record_pub_ts(rec)
+        prev = kept.get(link)
+        if prev is None:
+            kept[link] = (ts, idx, rec)
+            continue
+        prev_ts = prev[0]
+        newer = (ts is not None and (prev_ts is None or ts >= prev_ts)) or (ts is None and prev_ts is None)
+        if newer:
+            kept[link] = (ts, idx, rec)
+    deduped = [item[2] for item in sorted(kept.values(), key=lambda item: item[1])]
+    return deduped + tail
+
+
 def _execute_news_upsert(records: List[Dict[str, Any]]) -> int:
     if not records:
         return 0
@@ -1227,6 +1274,10 @@ def _execute_news_upsert(records: List[Dict[str, Any]]) -> int:
     except Exception as e:
         logger.warning("Supabase client unavailable for news upsert: %s", e)
         return 0
+
+    # Postgres 21000 guard: one ON CONFLICT statement may not touch the same
+    # `link` twice, so collapse duplicate links before chunking.
+    records = _dedupe_records_by_link(records)
 
     upsert_count = 0
     for start in range(0, len(records), 50):

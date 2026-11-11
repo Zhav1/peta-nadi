@@ -563,6 +563,15 @@ export function FleetVehicleLayer({
 
       for (let i = 0; i < visibleVehicles.length; i++) {
         const v = visibleVehicles[i];
+        // Spec #8 (fleet paint): snapshot vessels may carry only a server fix
+        // (current_coords) with no corridor. Feed it as a single-point polyline
+        // so the unit reaches the serverFix paint path instead of being dropped;
+        // length < 2 skips every corridor-simulation branch, so no trajectory is
+        // ever fabricated from it.
+        const currentCoordsFix: [number, number][] | null =
+          Array.isArray(v.current_coords) && v.current_coords.length >= 2
+            ? [[v.current_coords[0], v.current_coords[1]]]
+            : null;
         let coords = (
           v.route_geometry?.coordinates ||
           (v as any).route_coordinates ||
@@ -570,7 +579,8 @@ export function FleetVehicleLayer({
           (Array.isArray((v as any).waypoints)
             ? (v as any).waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]))
             : null) ||
-          v.path ||
+          (v.path && v.path.length > 0 ? v.path : null) ||
+          currentCoordsFix ||
           []
         ) as [number, number][];
 

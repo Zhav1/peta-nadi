@@ -25,7 +25,7 @@ interface NewsCitation {
 
 const AGENT_LABELS: Record<string, { name: string; source: string; defaultSourceType: 'live' | 'fixture' }> = {
   data_collection: { name: 'Koleksi Sensor Cuaca & Jalan', source: 'Sensor BMKG + TomTom Traffic', defaultSourceType: 'live' },
-  osint_hazard: { name: 'Verifikasi Berita & Lapangan', source: 'LKBN ANTARA + Warta BMKG', defaultSourceType: 'live' },
+  osint_hazard: { name: 'Verifikasi Berita & Lapangan', source: 'Berita + BMKG', defaultSourceType: 'live' },
   prediction: { name: 'Prakiraan Spasial & Cuaca', source: 'Model Numerik Open-Meteo & BMKG', defaultSourceType: 'fixture' },
   route_optimization: { name: 'Optimasi Rute Koridor', source: 'Solver Graf Koridor Pangan', defaultSourceType: 'live' },
   economic_intelligence: { name: 'Pemantauan Harga Pangan', source: 'Data Harga Harian PIHPS BI', defaultSourceType: 'live' },

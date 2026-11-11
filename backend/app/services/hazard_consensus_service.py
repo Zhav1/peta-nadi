@@ -72,6 +72,200 @@ def _iso(dt: Optional[datetime]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Display Titles (SPEC #2-backend): short Indonesian "{JenisBahayaID} · {area}"
+# ---------------------------------------------------------------------------
+
+_HAZARD_LABEL_EXACT: Dict[str, str] = {
+    "flood": "Banjir",
+    "landslide": "Longsor",
+    "earthquake": "Gempa",
+    "fire": "Kebakaran",
+    "haze": "Kebakaran",
+    "weather": "Cuaca",
+    "cyclone": "Cuaca",
+    "traffic": "Kemacetan",
+    "congestion": "Kemacetan",
+    "road_closure": "Jalan Putus",
+    "port_closure": "Pelabuhan Tutup",
+    "port": "Pelabuhan",
+    "marine": "Gelombang",
+    "volcanic": "Letusan",
+    "tsunami": "Gempa",
+    "infrastructure": "Gangguan",
+    "other": "Gangguan",
+    "disruption": "Gangguan",
+}
+
+# Ordered substring fallbacks (most specific first) for raw event strings such
+# as "weather_warning", "Hujan Lebat" or "Banjir Rob".
+_HAZARD_LABEL_SUBSTR: List[Tuple[str, str]] = [
+    ("road_closure", "Jalan Putus"),
+    ("port_closure", "Pelabuhan Tutup"),
+    ("earthquake", "Gempa"),
+    ("landslide", "Longsor"),
+    ("longsor", "Longsor"),
+    ("congestion", "Kemacetan"),
+    ("kemacetan", "Kemacetan"),
+    ("traffic", "Kemacetan"),
+    ("macet", "Kemacetan"),
+    ("weather", "Cuaca"),
+    ("cuaca", "Cuaca"),
+    ("hujan", "Cuaca"),
+    ("angin", "Cuaca"),
+    ("banjir", "Banjir"),
+    ("flood", "Banjir"),
+    ("kebakaran", "Kebakaran"),
+    ("karhutla", "Kebakaran"),
+    ("fire", "Kebakaran"),
+    ("gelombang", "Gelombang"),
+    ("marine", "Gelombang"),
+    ("volcanic", "Letusan"),
+    ("erupsi", "Letusan"),
+    ("gempa", "Gempa"),
+    ("pelabuhan", "Pelabuhan"),
+    # Low-priority weather tokens last (least specific).
+    ("rain", "Cuaca"),
+    ("hujan", "Cuaca"),
+]
+
+# Machine-generated fragments that must never survive into a display title
+# (e.g. "(CRITICAL - 8km Radius)", "Weather Alert (...)", "Corridor Alert").
+_MACHINE_TITLE_NOISE_RES = (
+    re.compile(r"\[[^\]]*\]"),  # "[Simulasi]", "[Simulated]"
+    re.compile(r"\([^()]*\)"),  # "(CRITICAL - 8km Radius)", "(rain)"
+    re.compile(r"\b(?:weather|flood|fire|traffic|corridor)\s+alert\b", re.IGNORECASE),
+    re.compile(r"\bcorridor\s+alert\b", re.IGNORECASE),
+    re.compile(r"\b\d+(?:[.,]\d+)?\s*km(?:\s*radius)?\b", re.IGNORECASE),
+    re.compile(r"\bkm\s*\d+(?:[.,]\d+)?\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:critical|severe|extreme|moderate|minor|alert|warning|simulated|simulasi|disruption)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:flood|landslide|earthquake|weather)\b", re.IGNORECASE),
+)
+
+_SIMULATION_TITLE_RE = re.compile(r"\b(?:simulasi|simulated|simulation)\b", re.IGNORECASE)
+
+_AREA_FIELD_PRIORITY = ("province", "wilayah", "location", "area", "area_name", "corridor_segment", "road_name")
+
+# "Pusat gempa berada di darat 15 km barat daya Tarutung, Sumut" -> "Tarutung"
+_QUAKE_PLACE_RES = (
+    re.compile(r"\b(?:barat\s+daya|timur\s+laut|barat\s+laut|barat|timur|utara|selatan|laut|darat)\s+([A-Z][A-Za-z .'\-]*?)(?:,|$)"),
+    re.compile(r"\bkm\s+([A-Z][A-Za-z .'\-]*?)(?:,|$)"),
+)
+
+
+def _strip_machine_title(text: Any) -> str:
+    """Removes machine patterns (severity/radius suffixes, 'Weather Alert', 'Corridor Alert')."""
+    out = str(text or "")
+    for pat in _MACHINE_TITLE_NOISE_RES:
+        out = pat.sub(" ", out)
+    return re.sub(r"\s{2,}", " ", out).strip(" \t-–—:·,")
+
+
+def _hazard_label_id(hazard_type: str) -> str:
+    key = str(hazard_type or "").lower().strip()
+    if key in _HAZARD_LABEL_EXACT:
+        return _HAZARD_LABEL_EXACT[key]
+    for token, label in _HAZARD_LABEL_SUBSTR:
+        if token in key:
+            return label
+    return "Gangguan"
+
+
+def _signal_area_name(s: Dict[str, Any]) -> str:
+    """Best explicit area name from a signal (never a PostGIS WKT / geometry blob)."""
+    for k in _AREA_FIELD_PRIORITY:
+        v = s.get(k)
+        if v is None or isinstance(v, (dict, list)):
+            continue
+        v_str = str(v).strip()
+        if not v_str:
+            continue
+        if re.match(r"(?i)^\s*srid=", v_str) or "POINT(" in v_str.upper():
+            continue
+        return v_str
+    return ""
+
+
+def _quake_place_from_title(raw_title: str) -> str:
+    """Extracts the nearest place name from a BMKG quake wilayah sentence."""
+    text = str(raw_title or "")
+    if " - " in text:
+        text = text.split(" - ", 1)[1]
+    for pat in _QUAKE_PLACE_RES:
+        m = pat.search(text)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+    return ""
+
+
+def _clean_area_candidate(label: str, area: str, raw_title: str = "", magnitude: Optional[float] = None) -> str:
+    """Resolves the area part of a display title: explicit field > quake place > cleaned raw title."""
+    candidate = _strip_machine_title(area)
+    if not candidate and magnitude is not None:
+        candidate = _quake_place_from_title(raw_title)
+    if not candidate:
+        candidate = _strip_machine_title(raw_title)
+    if not candidate:
+        return "Sumatera"
+    low_label = label.lower()
+    if candidate.lower().startswith(low_label + " "):
+        trimmed = candidate[len(low_label):].lstrip(" ·:-–—")
+        if trimmed:
+            candidate = trimmed
+    if len(candidate) > 64:
+        cut = candidate[:64]
+        sp = cut.rfind(" ")
+        candidate = (cut[:sp] if sp > 24 else cut).rstrip(" ,;-·")
+    return candidate
+
+
+def _display_title(
+    hazard_type: str,
+    area: str = "",
+    raw_title: str = "",
+    source: str = "",
+    magnitude: Optional[float] = None,
+) -> str:
+    """Short Indonesian display title "{JenisBahayaID} · {area}" (SPEC #2-backend).
+
+    Strips machine patterns like "(CRITICAL - 8km Radius)", "Weather Alert (...)",
+    "Corridor Alert" and English severity/radius suffixes. Prefixes "Simulasi: "
+    for simulation/demo sources. Callers keep the original raw title separately
+    (raw_title field) — this helper never mutates it.
+    """
+    label = _hazard_label_id(hazard_type)
+    if magnitude is not None and label == "Gempa":
+        label = f"Gempa M{float(magnitude):.1f}"
+    area_clean = _clean_area_candidate(label, area, raw_title, magnitude)
+    prefix = "Simulasi: " if _SIMULATION_TITLE_RE.search(f"{source or ''} {raw_title or ''}") else ""
+    return f"{prefix}{label} · {area_clean}"
+
+
+def _first_polygon_coord(geom: Any) -> Optional[Tuple[float, float]]:
+    """Returns (lat, lon) of the first vertex of a GeoJSON Polygon/MultiPolygon/GeometryCollection."""
+    try:
+        if not isinstance(geom, dict):
+            return None
+        g_type = geom.get("type")
+        if g_type == "GeometryCollection":
+            for sub in geom.get("geometries") or []:
+                found = _first_polygon_coord(sub)
+                if found:
+                    return found
+            return None
+        coords = geom.get("coordinates")
+        if g_type == "Polygon" and coords and isinstance(coords[0][0], (list, tuple)):
+            return float(coords[0][0][1]), float(coords[0][0][0])
+        if g_type == "MultiPolygon" and coords and isinstance(coords[0][0][0], (list, tuple)):
+            return float(coords[0][0][0][1]), float(coords[0][0][0][0])
+    except (ValueError, TypeError, IndexError):
+        return None
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 1. Multi-Source Signal Collection
 # ---------------------------------------------------------------------------
 
@@ -136,6 +330,7 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                 if coords and len(coords) > 0 and len(coords[0]) > 0:
                     lon, lat = coords[0][0][0], coords[0][0][1]
 
+            _wf_raw_title = str(props.get("label") or f"Weather Alert ({props.get('hazard_type', 'weather')})")
             signals.append({
                 "source": props.get("source") or "bmkg_radar_openmeteo",
                 "event_type": props.get("hazard_type") or "weather",
@@ -143,7 +338,13 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                 "severity": props.get("severity") or "medium",
                 "lat": lat,
                 "lon": lon,
-                "title": props.get("label") or f"Weather Alert ({props.get('hazard_type', 'weather')})",
+                "title": _display_title(
+                    str(props.get("hazard_type") or "weather"),
+                    _signal_area_name(props),
+                    raw_title=_wf_raw_title,
+                    source=str(props.get("source") or "bmkg_radar_openmeteo"),
+                ),
+                "raw_title": _wf_raw_title,
                 "geometry": geom,
                 "geometry_role": "source_footprint",
                 "ts": props.get("source_observed_at") or _iso(_now_utc()),
@@ -167,6 +368,7 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                     lat = row.get("lat")
                     lon = row.get("lon")
                     geom = row.get("affected_area")
+                    _news_raw_title = str(row.get("title") or "Laporan Berita Lapangan")
                     signals.append({
                         "id": row.get("incident_id"),
                         "source": "news",
@@ -176,7 +378,13 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                         "confidence": row.get("confidence") or 0.6,
                         "lat": lat,
                         "lon": lon,
-                        "title": row.get("title") or "Laporan Berita Lapangan",
+                        "title": _display_title(
+                            str(row.get("type") or "disruption"),
+                            _signal_area_name(row),
+                            raw_title=_news_raw_title,
+                            source="news",
+                        ),
+                        "raw_title": _news_raw_title,
                         "description": row.get("description") or "",
                         "geometry": geom,
                         "geometry_role": "buffer_footprint" if geom else "extent_unknown",
@@ -199,6 +407,7 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                 geom = feat.get("geometry")
                 coords = geom.get("coordinates") if geom else None
                 if coords and len(coords) >= 2:
+                    _firms_raw_title = str(props.get("title") or f"Titik Panas Thermal FIRMS ({props.get('confidence', 'nominal')})")
                     signals.append({
                         "source": "firms",
                         "event_type": "fire",
@@ -206,7 +415,8 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                         "severity": props.get("severity") or "high",
                         "lat": coords[1],
                         "lon": coords[0],
-                        "title": props.get("title") or f"Titik Panas Thermal FIRMS ({props.get('confidence', 'nominal')})",
+                        "title": _display_title("fire", _signal_area_name(props), raw_title=_firms_raw_title, source="firms"),
+                        "raw_title": _firms_raw_title,
                         "geometry": geom,
                         "geometry_role": "source_footprint",
                         "ts": props.get("acq_date") or _iso(_now_utc()),
@@ -221,6 +431,8 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                 s_lon = seg.get("lon")
                 delay = float(seg.get("delay_seconds") or 0)
                 if delay >= 300 and s_lat and s_lon:  # >= 5 min delay
+                    _road = str(seg.get("road_name") or "").strip()
+                    _tt_raw_title = _road or f"Kemacetan Arteri {seg.get('road_name') or 'Lintas Sumatra'}"
                     signals.append({
                         "source": "tomtom",
                         "event_type": "traffic",
@@ -228,7 +440,8 @@ async def gather_all_hazard_signals() -> List[Dict[str, Any]]:
                         "severity": "critical" if delay >= 1200 else ("high" if delay >= 600 else "medium"),
                         "lat": s_lat,
                         "lon": s_lon,
-                        "title": seg.get("road_name") or f"Kemacetan Arteri {seg.get('road_name', 'Lintas Sumatra')}",
+                        "title": _display_title("traffic", _road or "Lintas Sumatra", raw_title=_tt_raw_title, source="tomtom"),
+                        "raw_title": _tt_raw_title,
                         "ts": _iso(_now_utc()),
                     })
     except Exception as e:
@@ -402,11 +615,19 @@ async def compute_hazard_consensus(
         # Check if this is an official text-only warning / advisory area
         g_role = str(s.get("geometry_role") or "").lower()
         is_extent_unknown = g_role == "extent_unknown" or s.get("affected_area") is None and s.get("geometry") is None and s.get("lat") is None
-        is_text_warning = "warning" in raw_hazard or s.get("source") in ("bmkg_cap", "bmkg") and is_extent_unknown
-        
-        area_name = str(s.get("province") or s.get("wilayah") or s.get("location") or s.get("area") or s.get("title") or "")
-        
-        if is_text_warning and (is_extent_unknown or s.get("lat") is None):
+        # SPEC #6: a bmkg_cap signal that names a province is an advisory-area
+        # signal EVEN WHEN it carries affected_area geometry — the official
+        # province polygon (not the nowcast footprint) is the display truth.
+        is_province_cap = str(s.get("source") or "").lower() == "bmkg_cap" and bool(s.get("province"))
+        is_text_warning = (
+            "warning" in raw_hazard
+            or (s.get("source") in ("bmkg_cap", "bmkg") and is_extent_unknown)
+            or is_province_cap
+        )
+
+        area_name = str(s.get("province") or s.get("wilayah") or s.get("location") or s.get("area") or s.get("area_name") or s.get("title") or "")
+
+        if is_text_warning and (is_extent_unknown or s.get("lat") is None or is_province_cap):
             advisory_signals.append({
                 "raw": s,
                 "source": str(s.get("source") or "bmkg").lower(),
@@ -538,7 +759,33 @@ async def compute_hazard_consensus(
         llm_used = False
         plain_reason = ""
 
-        loc_title = str(cluster[0]["raw"].get("title") or f"{hazard_group.capitalize()} Corridor Alert")
+        # SPEC #2-backend: short Indonesian display title; original raw title preserved.
+        raw_title = str(cluster[0]["raw"].get("raw_title") or cluster[0]["raw"].get("title") or "")
+        cluster_area = ""
+        for _item in cluster:
+            _cand = _signal_area_name(_item["raw"])
+            if _cand:
+                cluster_area = _cand
+                break
+        _title_hazard = str(
+            cluster[0]["raw"].get("hazard_type")
+            or cluster[0]["raw"].get("event_type")
+            or cluster[0]["raw"].get("event")
+            or hazard_group
+        )
+        _title_mag: Optional[float] = None
+        if hazard_group == "earthquake":
+            try:
+                _title_mag = float(cluster[0]["raw"].get("magnitude") or 4.5)
+            except (ValueError, TypeError):
+                _title_mag = None
+        loc_title = _display_title(
+            _title_hazard,
+            cluster_area,
+            raw_title=raw_title,
+            source=cluster[0]["source"],
+            magnitude=_title_mag,
+        )
 
         if is_conflicted:
             llm_verdict, llm_reason = await evaluate_ambiguity_with_llm(
@@ -603,6 +850,7 @@ async def compute_hazard_consensus(
             "reason": plain_reason,
             "severity": severity,
             "title": loc_title,
+            "raw_title": raw_title,
             "center": {"lat": round(center_lat, 5), "lon": round(center_lon, 5)},
             "radius_km": round(radius_km, 2),
             "llm_used": llm_used,
@@ -619,22 +867,49 @@ async def compute_hazard_consensus(
         area_name = adv["area_name"] or "Sumatera"
         src = adv["source"]
 
+        # SPEC #6 point fallback: pin to the signal's own point when no official
+        # boundary exists — never invent an administrative shape.
+        fallback_point: Optional[Tuple[float, float]] = None
+        try:
+            fb_lat = raw.get("lat") or raw.get("latitude")
+            fb_lon = raw.get("lon") or raw.get("longitude")
+            if fb_lat is not None and fb_lon is not None:
+                fallback_point = (float(fb_lat), float(fb_lon))
+            else:
+                fallback_point = _first_polygon_coord(raw.get("geometry") or raw.get("affected_area"))
+        except (ValueError, TypeError):
+            fallback_point = None
+
         # Real administrative boundary lookup
         adm_geom = get_advisory_boundary_for_area(area_name)
         if adm_geom is not None:
             geom = adm_geom
             g_role = "advisory_area"
             reason = f"Peringatan dini administratif resmi BMKG untuk wilayah {area_name}. Tidak ada konfirmasi pemblokiran fisik jalan."
+        elif fallback_point is not None:
+            geom = make_point_buffer_polygon(fallback_point[0], fallback_point[1], radius_m=450.0)
+            g_role = "buffer_footprint"
+            reason = (
+                f"Peringatan dini BMKG untuk wilayah {area_name}. Batas administratif resmi belum tersedia; "
+                "zona ditampilkan sebagai titik indikatif, bukan batas wilayah resmi."
+            )
         else:
             # Report the gap rather than inventing shapes
             geom = None
             g_role = "extent_unknown"
             reason = f"Peringatan dini BMKG untuk wilayah {area_name}. Data batas administratif wilayah ini belum tersedia."
 
+        adv_center = (
+            {"lat": round(fallback_point[0], 5), "lon": round(fallback_point[1], 5)}
+            if (adm_geom is None and fallback_point is not None)
+            else None
+        )
+
         adv_hash = hashlib.sha256(f"{src}:{hazard_group}:{area_name}".encode("utf-8")).hexdigest()[:8]
         rec_id = f"cons-adv-{hazard_group}-{adv_hash}"
         expires_at = ref_time + timedelta(seconds=HAZARD_TTLS.get(hazard_group, 21600.0))
 
+        raw_title = str(raw.get("raw_title") or raw.get("title") or "")
         consensus_records.append({
             "id": rec_id,
             "type": hazard_group,
@@ -645,9 +920,15 @@ async def compute_hazard_consensus(
             "geometry_role": g_role,
             "reason": reason,
             "severity": "medium",
-            "title": raw.get("title") or f"Peringatan Dini Cuaca BMKG - {area_name}",
-            "center": None,
-            "radius_km": None,
+            "title": _display_title(
+                str(raw.get("hazard_type") or raw.get("event") or raw.get("event_type") or hazard_group),
+                area_name,
+                raw_title=raw_title,
+                source=src,
+            ),
+            "raw_title": raw_title or None,
+            "center": adv_center,
+            "radius_km": 0.45 if (adm_geom is None and fallback_point is not None) else None,
             "llm_used": False,
             "updated_at": _iso(ref_time),
             "expires_at": _iso(expires_at),
