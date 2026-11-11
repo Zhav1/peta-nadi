@@ -3,7 +3,7 @@
   "checkpoint_id": "01M756ZWNMV2KATDK21GJHFPEY",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "frontend/components/dashboard/LaporanCharts.tsx",
     "frontend/components/dashboard/LaporanHybridPanel.tsx"
@@ -20,22 +20,28 @@
       "transcript": "/1/full.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 1059372,
+    "input_tokens": 1845515,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 42496776,
-    "output_tokens": 167552,
-    "api_call_count": 298
+    "cache_read_tokens": 100063054,
+    "output_tokens": 273511,
+    "api_call_count": 586
   },
   "redaction": {
-    "replacements": 0,
+    "replacements": 3,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 0,
+      "credential_value": 3,
       "credentialed_uri": 0,
       "entropy": 0,
       "key_context": 0,
