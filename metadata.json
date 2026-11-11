@@ -3,7 +3,7 @@
   "checkpoint_id": "01M7570JG3BGRABX98NEACAVE3",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 4,
+  "checkpoints_count": 8,
   "files_touched": [
     "backend/app/services/telemetry_service.py",
     "backend/tests/test_precision_fleet_telemetry.py",
@@ -38,6 +38,12 @@
       "transcript": "/3/full.jsonl",
       "content_hash": "/3/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/4/metadata.json",
+      "transcript": "/4/full.jsonl",
+      "content_hash": "/4/content_hash.txt",
+      "prompt": "/4/prompt.txt"
     }
   ],
   "redaction": {
