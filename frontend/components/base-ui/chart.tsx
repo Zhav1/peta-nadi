@@ -43,21 +43,29 @@ export function ChartContainer({ config, className, children, ...props }: ChartC
   );
 }
 
+// Stable identities: recharts re-dispatches its internal tooltip/axis settings
+// store on every identity change, so module-level constants instead of inline
+// literals (React #185 "Maximum update depth exceeded" guard).
+const CURSOR_STYLE = { stroke: 'rgba(255,255,255,0.12)', strokeDasharray: '3 3' } as const;
+const CONTENT_STYLE = {
+  background: '#0c1017',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '12px',
+  fontSize: 12,
+  color: '#e2e8f0',
+} as const;
+const LABEL_STYLE = { color: '#94a3b8', fontSize: 12 } as const;
+const ITEM_STYLE = { color: '#e2e8f0', fontSize: 12 } as const;
+
 export function ChartTooltip(
   props: React.ComponentProps<typeof RechartsTooltip>,
 ) {
   return (
     <RechartsTooltip
-      cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeDasharray: '3 3' }}
-      contentStyle={{
-        background: '#0c1017',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '12px',
-        fontSize: 12,
-        color: '#e2e8f0',
-      }}
-      labelStyle={{ color: '#94a3b8', fontSize: 12 }}
-      itemStyle={{ color: '#e2e8f0', fontSize: 12 }}
+      cursor={CURSOR_STYLE}
+      contentStyle={CONTENT_STYLE}
+      labelStyle={LABEL_STYLE}
+      itemStyle={ITEM_STYLE}
       {...props}
     />
   );
