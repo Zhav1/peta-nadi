@@ -1,8 +1,9 @@
 # FEATURE STATUS — PreHub System Matrix
 
-**Milestone:** M8 — Fast & Durable  
+**Milestone:** M9 — Operational Truth & Distilled Command Surface [COMPLETED ✅]; post-milestone phases 177–181 deployed. M8 — Fast & Durable is code-complete (160-164 DONE, 165 PARTIAL, 166 soak NOT STARTED)  
+**Deployment reality (2026-11-11):** FastAPI backend on a Hostinger VPS (`/opt/prehub`, Caddy + Let's Encrypt, public API `https://api.177-202-246-251.nip.io`); frontend on Vercel (`pre-hub.vercel.app`); Render retired to a read-only standby; ingestion tick owned by the compose `scheduler` sidecar (300 s); CI/CD via `.github/workflows/deploy.yml` (GHCR → SSH → health gate → auto-rollback)  
 **Architecture Paradigm:** Hybrid Cognitive Swarm (NetworkX Dijkstra + Deterministic CPU Router + Google OR-Tools + Open-Meteo NWP + BMKG Radar Fusion)  
-**Last Updated:** 2026-10-27  
+**Last Updated:** 2026-11-11  
 
 ---
 
@@ -100,14 +101,13 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
 - **Watermelon MCP Connect (Phase 115, PLANNED ⏳)**
   - Menutup 7 primitif yang belum ada (Select/Chip/Card/Empty/Skeleton/Tooltip/Chart) via Watermelon MCP; `npx shadcn add` dilarang; `hideWhenDetached` absen di Base-UI 1.9.0; pola `asChild` digate saat review.
 
-- **Analitik Fixes (Phase 118, COMPLETE ?)**
-  - Peta/globe canvas dihapus total ? satu kolom penuh col-span-12; day pills glass hand-rolled + tombol Lihat Laporan shimmer motion-safe: tanpa shadcn add; REGION_TO_DB 8 slug ? 
-orth_sumatra, Semua ? undefined; tren DD/MM per bar + tanggal header + Tren min(days,len) + hijau/merah (#10b981/#ef4444, guard >= 3); spikes tetap honest-empty (spikeRecordsTotal < 3 guard + pesan backend). Read-only GET prices + GET spikes. Docs: 118-analitik-fixes/.
+- **Analitik Fixes (Phase 118, COMPLETE ✅)**
+  - Peta/globe canvas dihapus total → satu kolom penuh col-span-12; day pills glass hand-rolled + tombol Lihat Laporan shimmer motion-safe: tanpa shadcn add; REGION_TO_DB 8 slug → north_sumatra, Semua → undefined; tren DD/MM per bar + tanggal header + Tren min(days,len) + hijau/merah (#10b981/#ef4444, guard >= 3); spikes tetap honest-empty (spikeRecordsTotal < 3 guard + pesan backend). Read-only GET prices + GET spikes. Docs: 118-analitik-fixes/.
 
 - **PIHPS 8-Province Scraper (Phase 119, COMPLETE)**
   - PROVINCES 8 slugs -> BI ids + DISPLAY/SHORT_SLUG/CENTROID tables; fetch() region-outer loop keyed {commodity}@{region}; parse() region-scoped rolling/dedup/latest:{region}; bare latest stays north_sumatra compat; _persist_readings eq(region); REGION_TO_DB 1:1 (supersedes Phase 118 collapse). Tests +2. Docs: 119-pihps-8-province/.
 
-- **Analitik Fixes Followup (Phase 121, COMPLETE � docs-only)**
+- **Analitik Fixes Followup (Phase 121, COMPLETE ✅ — docs-only)**
   - Peta dihapus total (layers:[] + label menyesuaikan); days glass + Lihat Laporan shimmer hand-rolled motion-safe; REGION_TO_DB short-term 8?north_sumatra / Semua?undefined (diganti peta 1:1 Phase 119); tren DD/MM + header latest/tanggal + min(days,rows) + hijau/merah; spikes honest-empty; tooltip.tsx scaffold-only (0 konsumen, native title tetap). Docs: 121-analitik-fixes-followup/.
 - **Analitik Heatmap + BNPB Layout Milestone (Phase 126, COMPLETE ✅)**
   - Mixed dashboard: tren 8 + donat 4, 4 heatmap 6+6 (PriceHeatmap, BencanaHeatmap, CorrelationMatrix Pearson ≥10, TimeHeatstrip 4-pekan), tabel 8 + panel BNPB 4; 7 KPI + `AnalyticsTip` rich tooltips (base-ui, no Portal); PIHPS 10-provinsi (`babel`/`kepri` backfill, `{commodity}@{region}`); BNPB async 1 jam + Tier-0 CKAN Action API (`datastore_search` limit 500 + offset, kab 10 km / prov 25 km); DEGRADED → CKAN stats live, realtime via BMKG/FIRMS; canvas 0 (Playwright `analitik-heatmap-tooltip-bnpb` + M7 gate 2 passed). Docs: 126-analitik-heatmap-bnpb-layout/.

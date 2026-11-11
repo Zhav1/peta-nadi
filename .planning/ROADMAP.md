@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀] — phases 160–166
-**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅], M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
+**Active Milestone:** M9 - Operational Truth & Distilled Command Surface [COMPLETED ✅] — post-milestone phases 177–181 (Sumatra scope/public-first, mainland shadow pilot, realtime fusion, VPS migration + data-correctness hardening) are deployed; M8 (160–166) is code-complete with the production gate partially closed
+**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅], M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M10 - Mainland Sumatra Shadow Pilot & Multi-Source Disaster Fusion (Phase 178) [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -3058,7 +3058,7 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 ## Phase 118: Analitik Fixes
 
 **Goal:** Fix Analitik follow-ups on the Phase 117 tree: map entirely removed (full-width), honest region mapping, date-true trend headers, zero-motion shimmer actions  no shadcn add.
-**Status:** COMPLETE ? (docs-only pass; fixes already in working tree; no app edits, no commit)
+**Status:** COMPLETE ✅ (docs-only pass; fixes already in working tree; no app edits, no commit)
 
 ### Deliverables
 
@@ -3137,10 +3137,10 @@ pm run build ? 7/7 static routes, 0 errors.
 - [x] `npx tsc --noEmit` -> exit 0.
 - [x] `GET /health` -> 200; `GET /api/v1/evaluation/benchmark` -> 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`); `GET /api/v1/evaluation/live` -> 200.
 
-## Phase 150: P1 Foundation � Auto-Radius, Modal, Perusahaan (docs record)
+## Phase 150: P1 Foundation — Auto-Radius, Modal, Perusahaan (docs record)
 
 **Goal:** Record the P1 foundation slice (no code changes).
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3156,7 +3156,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 151: P2 Berita + TopNav (docs record)
 
 **Goal:** Record live-only Berita (Fokus / route-gated Hold) + minimalist TopNav.
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3170,7 +3170,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 152: P3 Zone Evidence-Only + Causal (docs record)
 
 **Goal:** Record zone evidence-only gating with hold_staging exclusion + always-visible causal chain.
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3184,7 +3184,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 153: P4 Titik Panas Cluster + Advisory Rename (docs record)
 
 **Goal:** Record FIRMS clustering rule + Waspada Dini naming.
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3198,7 +3198,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 154: P5 HITL / Detail 3-Section (docs record)
 
 **Goal:** Record evidence-gated HITL decisions, silent guest, forecast block.
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3212,7 +3212,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 155: Regression-Fix Batch (5) (docs record)
 
 **Goal:** Record the 5-item regression batch (`2de5ff8`).
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3226,7 +3226,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 156: Waspada Info-Only (docs record)
 
 **Goal:** Record the advisory display-only contract.
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3240,7 +3240,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 157: FIRMS Whole-Sumatra BBox (docs record)
 
 **Goal:** Record bbox-only geo gate (20 km drop removed).
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3255,7 +3255,7 @@ pm run build ? 7/7 static routes, 0 errors.
 ## Phase 158: Corridor-Preserve on Zone Click (docs record)
 
 **Goal:** Record zone-click corridor preservation (`af0f60d`).
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3266,10 +3266,10 @@ pm run build ? 7/7 static routes, 0 errors.
 
 - [x] `npx tsc --noEmit` -> exit 0 (window tail).
 
-## Phase 159: Vessel Restore � Dispatcher (docs record)
+## Phase 159: Vessel Restore — Dispatcher (docs record)
 
 **Goal:** Record tenant-truck + situational-vessel split (`b0072cc`).
-**Status:** COMPLETE ? (docs-only, no commit)
+**Status:** COMPLETE ✅ (docs-only, no commit)
 
 ### Deliverables
 
@@ -3283,11 +3283,18 @@ pm run build ? 7/7 static routes, 0 errors.
 
 ---
 
-# Milestone M8: Fast & Durable [ACTIVE 🚀]
+# Milestone M8: Fast & Durable [CODE-COMPLETE, GATE PARTIALLY CLOSED]
 
-**Status:** ACTIVE 🚀 (registered 2026-10-27; phases 160–166)
+**Status:** CODE-COMPLETE (registered 2026-10-27; phases 160–166; 160-164 DONE, 165 PARTIAL, 166 NOT STARTED)
 **Spec:** `.planning/M8-SPEC.md`
 **Budget:** $0. Free-host migration is a fallback gate only, not a paid upgrade.
+**Deployment reality (2026-11-11):** the backend no longer runs on Render — it moved to a
+Hostinger VPS (`/opt/prehub`, Caddy + Let's Encrypt, public API
+`https://api.177-202-246-251.nip.io`). The ingestion tick is owned by the compose
+`scheduler` sidecar (POST `/internal/tick` every 300 s); cron-job.org is retired. CI/CD is
+`.github/workflows/deploy.yml` (GHCR image → SSH → health gate → auto-rollback). The
+Render-era wording in the phase plans below (cron-job.org trigger, "direct-to-Render")
+is historical.
 
 M8 makes the authenticated dashboard fast on first load and durable across sessions on the zero-cost Render/Vercel stack. It fixes Supabase session refresh and cookie policy, thins the web process so batch ingestion moves to an idempotent external tick, serves a DB-backed `dashboard_snapshots` bootstrap with lazy-mounted sections, hardens the proxy cache boundary, and proves the result with Playwright plus a 7-day soak.
 
@@ -3344,7 +3351,7 @@ M8 makes the authenticated dashboard fast on first load and durable across sessi
 - **Lazy imports** for numpy/scipy/langgraph/adapters; no `init_db()` at import in production; JWKS pre-warm after startup.
 - **`GET /internal/tick`**: `X-Internal-Token` constant-time check, `202 { accepted, due, run_id }` returned immediately.
 - **Single-flight**: Postgres advisory lock or `job_runs.locked_until`; cadence gated on `last_run_at` + per-tick CPU budget; missed ticks catch up without duplicating a completed cycle.
-- **Trigger**: cron-job.org every 5 minutes, 90s timeout; GitHub Actions as secondary prober.
+- **Trigger**: cron-job.org every 5 minutes, 90s timeout; GitHub Actions as secondary prober. (Historical plan — superseded 2026-11-11: the compose `scheduler` sidecar POSTs `/internal/tick` every 300 s; cron-job.org is retired.)
 
 ### Verification
 - [ ] Cold boot responds in < 20s and `/health` returns 200 while a tick runs.

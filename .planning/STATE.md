@@ -2,13 +2,13 @@
 gsd_state_version: "1.0"
 milestone: M8
 milestone_name: Fast & Durable
-current_phase: 179
-current_phase_name: "Realtime Fusion Early Warning"
+current_phase: 180
+current_phase_name: "VPS Migration & Data-Correctness Hardening (covers SQL migrations phase180 + phase181)"
 status: in_progress
-stopped_at: "Phase 179 completed across Tracks A-E; acceptance gates verified."
-last_updated: 2026-11-07
-last_activity: 2026-11-07
-last_activity_desc: "Documented Phase 178: alternative route painting, single-flight SWR hydration, plane telemetry corridor persistence, multi-source disaster fusion, and hybrid TomTom/Mapbox traffic."
+stopped_at: "Backend live on the Hostinger VPS behind Caddy; the compose scheduler sidecar owns the ingestion tick; phases 179-181 code deployed and migrations applied (migrations remain a manual step)."
+last_updated: 2026-11-11
+last_activity: 2026-11-11
+last_activity_desc: "Synced planning memory with the VPS deployment (the backend moved OFF Render Free) and the six data-correctness fixes; phase record: phases/180-vps-migration-data-correctness/."
 state_head: HEAD
 progress:
   total_phases: 7
@@ -20,32 +20,67 @@ progress:
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-28
-**Active Milestone:** M8 - Fast & Durable (phases 160-166) [CODE-COMPLETE, GATE PARTIALLY CLOSED]
-**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M9 - Operational Truth & Distilled Command Surface (167-176.12) [COMPLETED ✅, deployed]
-**Current Phase:** 166 — Soak start + review (**NOT STARTED**)
+**Last Updated:** 2026-11-11
+**Active Milestone:** M9 - Operational Truth & Distilled Command Surface (167-176.12) [COMPLETED ✅, deployed]
+**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M8 - Fast & Durable (160-166) [CODE-COMPLETE, production gate partially closed], M10 - Mainland Sumatra Shadow Pilot & Multi-Source Disaster Fusion (Phase 178) [COMPLETED ✅]
+**Current Phase:** 180 — VPS migration + data-correctness hardening (deployed; post-milestone phases 177-181)
 
 ---
 
 ## Current Position
 
-Phase: **165 implementation-green, 166 soak pending.** M8's code (160-164a) is complete and
-live on Render + Vercel. The production gate is partially closed: read path (`1.017 s`, `8`
-API / `50` total requests), bootstrap (`200`, `1.9 s`), auth (`3/3`) and proxy isolation
-(`7/7`) pass. **Open:** cold start never measured, warm login never timed, 2 h session
-survival never run, PIHPS failed at `93 s`, warm `/health` `0.6 s` vs a `500 ms` target.
-The 7-day soak has **not** started — no start time, commit pin or artifact URL exists.
-Plan: `.planning/phases/166-soak-start-review/PLAN.md` ·
+Production topology (verified 2026-11-11): **the FastAPI backend runs on a Hostinger VPS** —
+`177.202.246.251`, SSH user `akin`, deploy dir `/opt/prehub`, Ubuntu 24.04, 2 vCPU / 7.9 GB —
+behind **Caddy + Let's Encrypt** (`{$API_DOMAIN}` in `Caddyfile`; public API
+`https://api.177-202-246-251.nip.io`). **The Next.js frontend stays on Vercel**
+(`https://pre-hub.vercel.app`). **Render Free no longer serves this backend**: the Render
+`peta-nadi` service is a read-only standby that must not own the tick or publish snapshots
+(it was one of the two publishers that clobbered per-section evidence — see phases 180/181).
+Ingestion is owned by the compose `scheduler` sidecar (`POST /internal/tick` every 300 s,
+`docker-compose.yml:81`); cron-job.org is retired. Runtime contract: `INPROCESS_BATCH_POLLERS=false`,
+`POLLERS_ENABLED=true`, exactly one uvicorn worker (`--workers 1`, compose line 61).
+CI/CD is `.github/workflows/deploy.yml`: push to `main` → hermetic test gate → build →
+GHCR (`ghcr.io/zhav1/peta-nadi/backend`) → SSH (`secrets.VPS_HOST/VPS_USER/VPS_PORT/DEPLOY_DIR`) →
+`git pull --ff-only` → image pull → restart → 90 s health gate → auto-rollback to the
+previous SHA (`/opt/prehub/.deployed_sha`). Migrations are applied manually.
+
+Phases 179 (realtime fusion, versioned snapshots), 180 (per-section evidence freshness
+guard) and 181 (guard also persists `degraded` sections) are code-deployed; migrations
+`20261107210000_phase179_*`, `20261110120000_phase180_*` and `20261110130000_phase181_*`
+are applied. Plan: `.planning/phases/180-vps-migration-data-correctness/` ·
 Ledger: `.planning/milestones/M8/PROGRESS.md` ·
-**Handoff (read first): `.planning/milestones/M8/HANDOFF.md`**
-Status: 160-164 DONE · 165 PARTIAL · 166 NOT STARTED · 164b (sync-I/O sweep) DEFERRED
-Next action: measure cold start, warm `/health` p95, 2 h session survival and the PIHPS
-retry; then start the soak per `phases/166-soak-start-review/WALKTHROUGH.md` and freeze
-deploys for 7 days. Do not close M8 on a partial gate.
-Last activity: 2026-10-28 — M8 phase artifacts (163/164/165/166), `HANDOFF.md`, production
-evidence recorded; no code touched.
-Previous: M9 "Operational Truth & Distilled Command Surface" (167-176.12) is complete and
-deployed independently of M8; M8 was numbered first and remains its own milestone.
+**Handoff (read first): `.planning/milestones/M8/HANDOFF.md`** — note its hosting table
+pre-dates the VPS migration and its Render rows are now historical.
+
+Six data-correctness fixes shipped 2026-11-07..11 (details and reusable rules in
+`.planning/LEARNINGS.md` § "2026-11-11"):
+1. BMKG adapter read `forecast["code"]`/`["desc"]`; the public payload uses
+   `weather`/`weather_desc` — Cuaca/Waspada had emitted zero events forever (`f734bea`).
+2. Provider budget caps were sized exactly to the job cadence (e.g. `bmkg_cap` 288/288
+   for three consecutive days), so one retry denied the source until UTC midnight —
+   resized with headroom; denials retry on the next tick (`b23c894`).
+3. Scheduler oversubscribed (43.5 slots/h demand vs 36/h supply): `tick_max_jobs` 3→6,
+   `tick_budget_seconds` 180→200 (< the 240 s lease TTL), and the per-job budget is now a
+   hard deadline via a dedicated executor so one slow job cannot hold the lease (`b23c894`, `540bc05`).
+4. TomTom data TTL was 600 s against a 3600 s cadence — the section was honestly stale
+   50 minutes of every hour; cadence/TTL both 1800 s, daily cap raised to 1500 (1.34× the
+   measured 1120 units/day) (`cbb47ab`, `66ebc3e`).
+5. News/incidents `_db_entry` had no `ORDER BY`, so `limit 60` returned the OLDEST rows of
+   8,312 and stamped `valid_until = now + 10 min` over month-old evidence; now
+   newest-first (`_ROW_ORDER`) with the observation stamped from the newest held row (`774c4d1`).
+6. Two workers (the VPS and the Render standby) published to the same Supabase project and
+   clobbered each other's sections; the per-section evidence guard (phase 180/181 SQL)
+   rejects any incoming section older than the stored one (`7f15e99`, `91b0450`).
+
+Known honest states (not bugs): `traffic_flow_segments` may report `degraded` at 19/20
+checkpoint coverage; `news` and `incidents` may report `stale` when no qualifying new rows
+exist. The system now reports truthfully instead of fabricating `ok`.
+
+Status: M8 160-164 DONE · 165 PARTIAL · 166 NOT STARTED · 164b (sync-I/O sweep) DEFERRED ·
+post-milestone phases 177-181 deployed to the VPS.
+Next action: watch the first week of VPS operation (health gate, scheduler logs,
+`/internal/tick/status`, provider budgets) and keep applying Supabase migrations manually
+before or with each deploy. Do not re-enable the Render standby as a publisher.
 
 
 
@@ -325,7 +360,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 3. **Dynamic Multi-Market Analytics Risk Cards**: Wire `AnalyticsSection.tsx` risk cards to live multi-market PIHPS price spreads when scrapers or multi-province feeds are active.
 4. **Status Koridor Derivation**: Expand Laporan's "Status Koridor" from single-crisis severity to aggregate corridor health across all active routes.
 5. **Full E2E Suite Run & Visual Browser Audit**: Run full Playwright test suite and perform visual audit of all pages.
-6. **Render Backend Redeployment**: Deploy backend to Render to complete endpoint deprecation.
+6. **Render Backend Redeployment** (obsolete 2026-11-11): the backend moved to the Hostinger VPS; Render `peta-nadi` remains only as a read-only standby and no longer serves the API. Deprecated endpoints are already absent from the VPS deployment.
 7. **Review `handleCrisisReadyFromDemo` Default Corridor**: Review fallback to `'belawan'` -> `'tebingtinggi'`.
 
 ## Phase 116 Log (2026-10-25)
@@ -346,7 +381,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Phase 118 Log (2026-10-25)
 
-- Phase 118 (Analitik Fixes) logged as COMPLETE ? � docs-only pass, no app edits, no commit.
+- Phase 118 (Analitik Fixes) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Removed: map/globe canvas entirely ? full-width single column (AnalyticsSection.tsx:343-346, contract 24-28).
 - Kept/fixed: hand-rolled glass days (L319-339, role=group + aria-pressed/label/title, no shadcn add) + shimmer Lihat Laporan zero-motion (L469-480, motion-safe only); REGION_TO_DB 8 slugs ? north_sumatra, Semua '' ? undefined (L49-65, applied L195/L235); trend DD/MM per bar (formatDayMonth L116-122, T- fallback only when time missing L379) + header date (formatFullDate L124-130, call L359) + Tren min(days,len) header (L370) + green/red bars (#ef4444/#10b981, L267-273, >= 3 guard L277); spikes keep honest (SpikeItem/severityBadge L94-114, server-filtered loadSpikes + spikeRecordsTotal L230-257, sorted filteredSpikes L280-284, guard L431-438, Table h-11 L441-466).
 - Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
@@ -363,8 +398,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Phase 121 Log (2026-10-26)
 
-- Phase 121 (Analitik Fixes Followup) logged as COMPLETE � docs-only pass, no app edits, no commit.
-- Documented 6 user-note follow-ups: map canvas removed entirely (was layers:[] empty globe + misleading Sumatera-Jawa label); hand-rolled glass days pills + shimmer Lihat Laporan (base-ui outline transparent on #0c1017 was bare text; registry only shimmer-button adoptable, others need motion � hand-rolled motion-safe, no shadcn add, no new deps); REGION_TO_DB short-term collapse (8 slugs to north_sumatra, Semua to undefined; superseded by Phase 119 1:1 map); trend DD/MM from time + min(days,rows) header + green down/red up + latest+date header; spikes kept honest-empty (eq(sumut) 0 rows + <3 guard + <5%); tooltip.tsx scaffold-only (103 lines, zero consumers, native title stands).
+- Phase 121 (Analitik Fixes Followup) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
+- Documented 6 user-note follow-ups: map canvas removed entirely (was layers:[] empty globe + misleading Sumatera-Jawa label); hand-rolled glass days pills + shimmer Lihat Laporan (base-ui outline transparent on #0c1017 was bare text; registry only shimmer-button adoptable, others need motion → hand-rolled motion-safe, no shadcn add, no new deps); REGION_TO_DB short-term collapse (8 slugs to north_sumatra, Semua to undefined; superseded by Phase 119 1:1 map); trend DD/MM from time + min(days,rows) header + green down/red up + latest+date header; spikes kept honest-empty (eq(sumut) 0 rows + <3 guard + <5%); tooltip.tsx scaffold-only (103 lines, zero consumers, native title stands).
 - Root cause noted: pihps_scraper.py REGION=north_sumatra + SUMUT_PROVINCE_ID=2 hardcode; consumers expanded, producer not (fixed in prior unit; BI ids 1/2/3/4/6/7/8/10 live-confirmed).
 - Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
 - Note: actual phases max was 120 (not 119 as tasked); created 121-analitik-fixes-followup to avoid collision with 120-pihps-multiregion-aggregation-timeseries.
@@ -372,63 +407,63 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Phase 150 Log (2026-10-27)
 
-- Phase 150 (P1 Foundation) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 150 (P1 Foundation) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Auto-radius chain `radius_km ?? simulatedShockwave.radiusKm ?? selectedRadius ?? 8` (DashboardClient.tsx:3562); `autoRadiusKm` prop (CrisisSimulatorBar.tsx:85,116,571); speed fixed 1x (:522).
 - Modal 3-section shell (Risiko / Dampak & Biaya / Verifikasi); roster single-source `#fleet-roster-toggle`.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/150-p1-foundation-auto-radius-modal-perusahaan/.
 
 ## Phase 151 Log (2026-10-27)
 
-- Phase 151 (P2 Berita + TopNav) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 151 (P2 Berita + TopNav) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Hold gated on real route (DashboardClient.tsx:3275); TopNav 3 pills, dormant props kept `_`-prefixed; zero-cost Fokus via stored audit trail.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/151-p2-berita-topnav/.
 
 ## Phase 152 Log (2026-10-27)
 
-- Phase 152 (P3 Zone Evidence-Only + Causal) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 152 (P3 Zone Evidence-Only + Causal) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Tab lock + hold_staging double exclusion (CrisisSidebar.tsx:56-68); always-visible causal collapse (:183-206).
 - Evidence (window tail): tsc 0. Docs: .planning/phases/152-p3-zone-evidence-only-causal/.
 
 ## Phase 153 Log (2026-10-27)
 
-- Phase 153 (P4 Titik Panas Cluster + Advisory) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 153 (P4 Titik Panas Cluster + Advisory) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Single-link 5 km cluster, >=3 high-conf (conf>=80 or FRP>100); orange map-only exception; Waspada Dini default OFF.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/153-p4-titik-panas-cluster-advisory/.
 
 ## Phase 154 Log (2026-10-27)
 
-- Phase 154 (P5 HITL / Detail 3-Section) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 154 (P5 HITL / Detail 3-Section) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Evidence-gated APPROVE/OVERRIDE, HOLD-only fallback, forecast total block, silent guest, Mitigation hitlBlocked mirror.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/154-p5-hitl-detail-3section/.
 
 ## Phase 155 Log (2026-10-27)
 
-- Phase 155 (Regression-Fix Batch 5) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 155 (Regression-Fix Batch 5) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Records `2de5ff8` (+529/-637): evidence distill, histori removal, armada dedup, titik panas/waspada restore, berita hold gate.
 - Note: untracked probe debris (`bench.json`, `erp1/5.json`, `evlive.json`, `h1.json`, `headers1.txt`) must be deleted before any commit.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/155-regression-fix-batch-5/.
 
 ## Phase 156 Log (2026-10-27)
 
-- Phase 156 (Waspada Info-Only) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 156 (Waspada Info-Only) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Default OFF, no forecast detour calc, disruption-only `min_severity=high` default, 409 guard kept.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/156-waspada-info-only/.
 
 ## Phase 157 Log (2026-10-27)
 
-- Phase 157 (FIRMS Whole-Sumatra BBox) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 157 (FIRMS Whole-Sumatra BBox) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Bbox 94,-6,108,6 only geo gate; spine = provenance; 500-cap FRP desc; honest-degraded on missing MAP_KEY; MAP_KEY Render-backend-only.
 - Evidence (this pass): pytest firms 2 passed, tsc 0. Docs: .planning/phases/157-firms-whole-sumatra-bbox/.
 
 ## Phase 158 Log (2026-10-27)
 
-- Phase 158 (Corridor-Preserve) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 158 (Corridor-Preserve) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Records `af0f60d` (+8/-9): both zone-click wipes removed; audit payload honest-empty; explicit reset kept.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/158-corridor-preserve-zone-click/.
 
 ## Phase 159 Log (2026-10-27)
 
-- Phase 159 (Vessel Restore) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Phase 159 (Vessel Restore) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
 - Records `b0072cc` (+110/-25): modality-split tenancy (trucks scoped, maritime/air public); badge = liveTenantVehicles; test contract updated.
 - Evidence (this pass): pytest test_fleet_ingest 12 passed, tsc 0. Docs: .planning/phases/159-vessel-restore-dispatcher/.
 
@@ -522,5 +557,37 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
   - Plan: `.planning/phases/179-realtime-fusion-early-warning/179-01-PLAN.md`
   - Summary: `.planning/phases/179-realtime-fusion-early-warning/179-01-SUMMARY.md`
   - Migration: `infra/supabase/migrations/20261107210000_phase179_versioned_snapshot_realtime.sql`
-  - Koyeb deployment spec: `koyeb.yaml`
+  - Koyeb deployment spec: `koyeb.yaml` (superseded 2026-11-11 — the VPS deployment replaced the Koyeb/Render option before Koyeb was ever used)
+
+## Phase 180 Log (2026-11-11) — VPS Migration & Data-Correctness Hardening
+
+- **Hosting changed**: the FastAPI backend moved OFF Render Free onto a Hostinger VPS
+  (`177.202.246.251`, SSH user `akin`, deploy dir `/opt/prehub`, Ubuntu 24.04, 2 vCPU /
+  7.9 GB), public API `https://api.177-202-246-251.nip.io` behind Caddy + Let's Encrypt.
+  The frontend stays on Vercel. Render `peta-nadi` is a read-only standby only.
+- **Ingestion tick** is owned by the compose `scheduler` sidecar (POST `/internal/tick`
+  every 300 s). cron-job.org is retired. `INPROCESS_BATCH_POLLERS=false`,
+  `POLLERS_ENABLED=true`, exactly one uvicorn worker.
+- **CI/CD**: `.github/workflows/deploy.yml` — push to `main` → hermetic test gate → build →
+  GHCR (`ghcr.io/zhav1/peta-nadi/backend`) → SSH → `git pull --ff-only` → image pull →
+  restart → 90 s health gate → auto-rollback.
+- **Migrations applied (manual step)**: `20261110120000_phase180_section_freshness_guard.sql`
+  (per-section evidence freshness guard in `publish_public_dashboard_snapshot`) and
+  `20261110130000_phase181_section_guard_degraded.sql` (guard also persists `degraded`
+  sections). Migration `013` was reconciled rather than run as written.
+- **Six data-correctness fixes shipped** (commits `f734bea`, `b23c894`, `540bc05`,
+  `cbb47ab`, `66ebc3e`, `774c4d1`, `7f15e99`, `91b0450`): BMKG `weather`/`weather_desc`
+  field mapping; provider budget headroom; scheduler capacity 6/tick @ 200 s with hard
+  per-job deadlines; TomTom cadence = TTL = 1800 s and daily cap 1500; newest-first
+  news/incident DB sections with truthful observation stamps; per-section evidence-recency
+  publish guard. Full lessons in `.planning/LEARNINGS.md`.
+- **Known honest states (not bugs)**: `traffic_flow_segments` may report `degraded` at
+  19/20 checkpoint coverage; `news` and `incidents` may report `stale` when no qualifying
+  new rows exist. Truthful reporting is the intended behavior.
+- **Docs record**: `.planning/phases/180-vps-migration-data-correctness/`
+  (`180-CONTEXT.md`, `180-01-PLAN.md`, `180-01-SUMMARY.md`).
+- **Stale hosting claims carried in other files (not rewritten here)**:
+  `.planning/milestones/M8/HANDOFF.md` and `M8/PROGRESS.md` still describe the Render
+  backend and cron-job.org tick — historical for M8; `koyeb.yaml` in the repo root is
+  retained but unused.
 

@@ -441,8 +441,36 @@ The window log reported WP1 48, WP2 41p/1f (Brier), WP3 22+114, WP4 22+104, WP5 
 
 ### Issues (do not repeat)
 
-- Distance-as-filter loses island fires � provenance only (157).
-- Syncing map to inspection payload reads as data loss � decouple (158).
-- Blanket tenancy zeroes situational pills � scope by modality (159).
+- Distance-as-filter loses island fires → provenance only (157).
+- Syncing map to inspection payload reads as data loss → decouple (158).
+- Blanket tenancy zeroes situational pills → scope by modality (159).
 - Banners do not enforce; gates do (154).
 - Probe debris (`bench.json`, `erp*.json`, `evlive.json`, `h1.json`, `headers1.txt`) must be deleted before any commit (155).
+
+---
+
+## 2026-11-11 — VPS Migration & Data-Correctness Hardening (phases 179–181; record: `.planning/phases/180-vps-migration-data-correctness/`)
+
+**Scope:** Backend moved OFF Render Free to a Hostinger VPS (`/opt/prehub`, Caddy + Let's Encrypt, public API `https://api.177-202-246-251.nip.io`; frontend unchanged on Vercel); tick owned by the compose `scheduler` sidecar (300 s); CI/CD = `.github/workflows/deploy.yml` (GHCR `ghcr.io/zhav1/peta-nadi/backend` → SSH → `git pull --ff-only` → 90 s health gate → auto-rollback). Six data-correctness fixes, each a reusable rule:
+
+### Fixes → rules (symptom → rule)
+
+1. **Wrong payload keys = a source that never fires.** The BMKG adapter read `forecast["code"]`/`forecast["desc"]`, but the public payload uses `weather`/`weather_desc` — Cuaca and Waspada had emitted zero events forever, with no error anywhere. Rule: an adapter that returns an *empty-but-healthy* result for weeks is a field-mapping bug until proven otherwise; assert adapter output against one real upstream payload in a test (`f734bea`, `backend/app/adapters/bmkg_adapter.py`).
+2. **A budget sized to exactly the cadence has zero slack and will deny the source for the rest of the day.** `private.provider_budget_counters` showed `bmkg_cap` pinned at 288/288 for three consecutive days and TomTom at 48/48 daily: one retry consumed the last slot and the source was denied until UTC midnight, so its section went stale. Rule: size provider caps at ≥1.3× measured demand (headroom absorbs retries and drift), and design denials to *retry on the next tick*, never to wait for the UTC rollover (`b23c894`, `config.py` `provider_budget_daily_limits`).
+3. **Capacity must be sized from measured job cost, not from job count.** The scheduler was oversubscribed: demand 43.5 slots/h vs supply 36/h (12 ticks/h × `tick_max_jobs=3`), so the queue grew every hour. Measured p50 job cost: news 97 s, bnpb 60 s, tomtom 22 s, bmkg 21 s. Fixed with `tick_max_jobs` 3→6 (72 slots/h ≈ 1.62× demand) and `tick_budget_seconds` 180→200, still under the 240 s lease TTL. Rule: compute supply = ticks/h × jobs/tick against *measured* per-job seconds, and keep the per-tick budget strictly below the lease TTL (`b23c894`, `job_scheduler.py` docstring + capacity test).
+4. **A soft time budget lets one slow job hold the lease hostage.** The per-job budget was cooperative; one hung job consumed the whole tick. Rule: make the per-job budget a *hard deadline* on a dedicated executor so a slow job is cancelled, not waited on (`540bc05`).
+5. **A TTL longer than the cadence makes staleness structural; a TTL shorter than the cadence wastes quota.** TomTom data TTL was 600 s against a 3600 s cadence — the section was honestly stale 50 minutes of every hour. Fixed: cadence and TTL both 1800 s, and the daily cap raised to 1500 (1.34× the measured 1120 units/day). Rule: TTL == cadence is the default contract (`test_freshness_cadence_contract.py` enforces it); raise the cap, not the cadence, when quota is the constraint (`cbb47ab`, `66ebc3e`).
+6. **An unordered `limit` read plus a `now()` stamp fabricates fresh data.** News/incidents `_db_entry` had no `ORDER BY`, so `limit 60` returned the OLDEST rows of 8,312 while stamping `valid_until = now + 10 min` — month-old evidence presented as fresh. Fixed: newest-first `_ROW_ORDER` (`news_articles→published_at`, `incidents→created_at`), and `observed_at`/`valid_until` are derived from the *newest held row*, never from the clock; an empty-but-successful read publishes no stamps. Rule: every freshness stamp must be traceable to the evidence it describes (`774c4d1`, `public_snapshot_service.py`).
+7. **Two writers to the same table need an evidence-recency guard, not just a row-level one.** The VPS and the Render standby published to the same Supabase project; the outer snapshot row was guarded by `computed_at`, but per-section upserts were not — and `computed_at` is fresh on *both* publishers, so a worker holding 43-minute-old traffic evidence overwrote a 2-minute-old row and `traffic_flow_segments` flipped ok↔stale every few minutes. Rule: compare sections by their *evidence stamp* (`observed_at`, else `valid_until`), never by assembly time; accept ties so same-tick publishers never deadlock; project the stored (fresher) section back into the served payload when a write is rejected (`7f15e99`, `91b0450`; SQL in migrations `phase180`/`phase181`).
+
+### Honest states to keep (not bugs)
+
+- `traffic_flow_segments` may report `degraded` at 19/20 checkpoint coverage.
+- `news` and `incidents` may report `stale` when no qualifying new rows exist.
+- The snapshot reporting these truthfully instead of fabricating `ok` is the intended behavior — do not "fix" them by widening freshness windows.
+
+### Constraints / environment notes
+
+- Migrations remain a **manual** step; `.github/workflows/deploy.yml` deliberately never runs `supabase db push`. Deploy order: apply migrations, then merge/deploy.
+- Exactly one ingestion writer: one uvicorn worker (`--workers 1`), `INPROCESS_BATCH_POLLERS=false`, `POLLERS_ENABLED=true`, tick via the compose `scheduler` sidecar. A second publisher (Render standby) must stay read-only — it is what caused fix #7.
+- `koyeb.yaml` remains in the repo root but is unused; the VPS deployment superseded it before Koyeb was ever deployed.
