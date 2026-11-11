@@ -415,6 +415,41 @@ function FloatingMapLegend({
               </div>
             </div>
 
+            {/* ── Simpul Logistik (TomTom 20 Chokepoints) ────────────────────── */}
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+              <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
+                Simpul Logistik (TomTom 20 Chokepoints)
+              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#10b981] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Arus Bebas / Lancar (&gt;70% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Laju kendaraan normal mendekati batas kecepatan bebas.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#f59e0b] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Padat / Tersendat (40-70% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Perlambatan signifikan akibat antrean tol/pelabuhan.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-1 bg-[#ef4444] shrink-0 rounded" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Macet Berat (&lt;40% limit)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Kemacetan parah atau perlambatan kritis di simpul logistik.</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-[rgba(232,234,237,0.45)] font-sans leading-tight pt-0.5">
+                Dipantau pada 20 simpul tol &amp; pelabuhan logistik Trans-Sumatera
+              </p>
+            </div>
+
             <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
               <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
                 Armada
